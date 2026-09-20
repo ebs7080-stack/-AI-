@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>교사 페이지 - 코드 웹 분석 도구</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img src="/logo.svg" alt="" width="32" height="32">
+      <b>PyLearn</b><span>파이썬 버디</span>
+    </a>
+    <a class="btn btn-secondary" href="/">← 학생 입장 화면으로</a>
+  </header>
+
+  <div class="landing" style="min-height:calc(100vh - 64px)">
+    <div class="landing-inner">
+      <header class="hero">
+        <span class="pill">TEACHER</span>
+        <h1>교사 페이지</h1>
+        <p>학급을 만들고, 대시보드에서 학생들이 어려워하는 부분을 확인하세요.</p>
+      </header>
+
+      <div class="role-grid">
+        <section id="create-view" class="card role-card" aria-labelledby="create-title">
+          <div class="top">
+            <span class="icon-tile large amber" aria-hidden="true">🏫</span>
+            <span class="badge amber">NEW CLASS</span>
+          </div>
+          <h2 id="create-title">학급 만들기</h2>
+          <p class="muted">학급을 만들면 학생들이 입장할 때 쓰는 학급 코드가 생깁니다.</p>
+          <form id="class-form" class="grow">
+            <label for="class-name">학급 이름</label>
+            <input id="class-name" type="text" maxlength="50" placeholder="예: 1학년 3반 정보" autocomplete="off" required>
+            <button class="btn btn-amber btn-block" type="submit">학급 만들기 →</button>
+            <p id="class-error" class="error" role="alert"></p>
+          </form>
+        </section>
+
+        <section id="created-view" class="card role-card" hidden>
+          <div class="top">
+            <span class="icon-tile large amber" aria-hidden="true">🎉</span>
+            <span class="badge amber">CREATED</span>
+          </div>
+          <h2 id="created-name" class="created-title"></h2>
+          <div class="created-block">
+            <p>학생들에게 알려 줄 <strong>학급 코드</strong></p>
+            <div id="created-code" class="secret"></div>
+          </div>
+          <div class="created-block">
+            <p>선생님만 보관할 <strong>교사 키</strong></p>
+            <div id="created-key" class="secret"></div>
+          </div>
+          <p class="notice">교사 키는 지금 한 번만 보여 드립니다. 화면을 닫기 전에 안전한 곳에 적어 두세요. 대시보드에 다시 들어올 때 필요합니다.</p>
+          <button id="open-dashboard" class="btn btn-primary btn-block" type="button">대시보드 열기 →</button>
+          <p id="open-error" class="error" role="alert"></p>
+        </section>
+
+        <section id="login-view" class="card role-card" aria-labelledby="login-title">
+          <div class="top">
+            <span class="icon-tile large" aria-hidden="true">📈</span>
+            <span class="badge">DASHBOARD</span>
+          </div>
+          <h2 id="login-title">대시보드 열기</h2>
+          <p class="muted">학급을 만들 때 받은 학급 코드와 교사 키를 입력하세요.</p>
+          <form id="login-form" class="grow">
+            <label for="login-code">학급 코드</label>
+            <input id="login-code" type="text" maxlength="20" autocomplete="off" required>
+            <label for="login-key">교사 키</label>
+            <input id="login-key" type="password" maxlength="100" autocomplete="off" required>
+            <button class="btn btn-primary btn-block" type="submit">대시보드 열기 →</button>
+            <p id="login-error" class="error" role="alert"></p>
+          </form>
+          <a id="resume-link" class="btn btn-secondary btn-block" href="/dashboard.html" hidden></a>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script src="/teacher.js"></script>
+</body>
+</html>

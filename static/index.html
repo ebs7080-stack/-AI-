@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PyLearn 파이썬 버디 - 코드 웹 분석 도구</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- 입장 화면 -->
+  <div id="join-view" class="landing" hidden>
+    <span class="doodle d1" aria-hidden="true">print("Hello, World!")</span>
+    <span class="doodle d2" aria-hidden="true">def solve_puzzle():</span>
+    <span class="doodle d3" aria-hidden="true">scores = [100, 95, 98]</span>
+    <span class="doodle d4" aria-hidden="true">if is_correct: level_up()</span>
+
+    <div class="landing-inner">
+      <header class="hero">
+        <span class="pill"><span class="dot"></span>중·고등학교 정보·소프트웨어 수업 지원</span>
+        <img src="/logo.svg" alt="" width="88" height="88">
+        <h1>PyLearn <span>파이썬 버디</span></h1>
+        <p>파이썬 코드를 제출하면 정답 대신 단계별 힌트를 알려 줍니다.</p>
+      </header>
+
+      <div class="role-grid">
+        <section class="card role-card" aria-labelledby="join-title">
+          <div class="top">
+            <span class="icon-tile large" aria-hidden="true">🚀</span>
+            <span class="badge">STUDENT</span>
+          </div>
+          <h2 id="join-title">수업 입장하기 ✨</h2>
+          <p class="muted">선생님께 받은 학급 코드와 닉네임을 입력하세요.</p>
+          <form id="join-form" class="grow">
+            <label for="join-code">학급 코드</label>
+            <input id="join-code" type="text" maxlength="20" autocomplete="off" required>
+            <label for="nickname">닉네임</label>
+            <input id="nickname" type="text" maxlength="20" autocomplete="off" required>
+            <p class="muted small" style="margin-top:10px">다시 입장할 때는 같은 닉네임을 입력하면 이전 기록이 이어집니다.</p>
+            <button class="btn btn-primary btn-block" type="submit">입장하기 →</button>
+            <p id="join-error" class="error" role="alert"></p>
+          </form>
+        </section>
+
+        <section class="card role-card" aria-labelledby="teacher-title">
+          <div class="top">
+            <span class="icon-tile large amber" aria-hidden="true">📊</span>
+            <span class="badge amber">TEACHER</span>
+          </div>
+          <h2 id="teacher-title">교사로 시작하기</h2>
+          <p class="muted">학급을 만들고, 학생들이 어려워하는 부분을 대시보드에서 확인하세요.</p>
+          <ul class="features amber grow">
+            <li>학급 코드를 학생들에게 알려 주세요</li>
+            <li>교사 키는 학급을 만들 때 한 번만 보여 드려요</li>
+            <li>교사 키로 학급 대시보드에 들어갈 수 있어요</li>
+          </ul>
+          <a class="btn btn-amber btn-block" href="/teacher.html">교사 페이지 열기 →</a>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- 코드 제출 화면 -->
+  <div id="main-view" hidden>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <img src="/logo.svg" alt="" width="32" height="32">
+        <b>PyLearn</b><span>파이썬 버디</span>
+      </a>
+      <div class="topbar-right">
+        <span class="user-chip">
+          <span class="avatar" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z"/></svg>
+          </span>
+          <span id="who"></span>
+        </span>
+        <button id="logout" class="btn btn-secondary" type="button">나가기</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="card summary">
+        <div class="summary-text">
+          <span class="pill"><span class="dot"></span><span id="mode-pill"></span></span>
+          <h1 id="mode-title"></h1>
+          <p id="mode-desc" class="muted"></p>
+        </div>
+        <div class="summary-side">
+          <div class="stat">
+            <span class="icon-tile" aria-hidden="true">🕘</span>
+            <div>
+              <span class="label">이 코드의 제출 횟수</span>
+              <span id="attempt-count" class="value">0회</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="finish-thread" class="btn btn-primary" type="button" hidden>다 고쳤어요 ✓</button>
+            <button id="start-help" class="btn btn-amber" type="button" hidden>다른 친구 도와주러 가기 🤝</button>
+            <button id="end-help" class="btn btn-secondary" type="button" hidden>도움 마치기</button>
+            <button id="new-code" class="btn btn-secondary" type="button" hidden></button>
+          </div>
+        </div>
+        <p id="action-error" class="error" role="alert"></p>
+      </section>
+
+      <div class="layout">
+        <section class="card stream-card" aria-labelledby="stream-heading">
+          <div class="panel-head">
+            <span class="icon-tile" aria-hidden="true">🐍</span>
+            <div class="grow">
+              <h2 id="stream-heading">제출한 코드</h2>
+              <p id="stream-sub" class="muted small"></p>
+            </div>
+            <div class="arrows">
+              <button id="stream-prev" class="icon-btn" type="button" aria-label="이전 버전 보기">‹</button>
+              <button id="stream-next" class="icon-btn" type="button" aria-label="다음 버전 보기">›</button>
+            </div>
+          </div>
+          <div id="stream" class="stream" tabindex="0" aria-label="제출한 코드 버전 목록"></div>
+        </section>
+
+        <div class="side">
+          <section class="card hints-card" aria-labelledby="hint-heading">
+            <div class="panel-head">
+              <span class="icon-tile amber" aria-hidden="true">💡</span>
+              <div class="grow">
+                <h2 id="hint-heading">지금 확인해볼 부분</h2>
+                <p id="hint-sub" class="muted small"></p>
+              </div>
+            </div>
+            <div id="hint-empty" class="empty-state">
+              <span class="emoji" aria-hidden="true">🔍</span>
+              <p>코드를 제출하면 확인해볼 부분이 여기에 나타나요.</p>
+            </div>
+            <div id="findings" aria-live="polite" hidden></div>
+            <p id="hint-error" class="error" role="alert"></p>
+          </section>
+
+          <section class="card chat-card" aria-labelledby="chat-heading">
+            <div class="panel-head">
+              <span class="icon-tile" aria-hidden="true">💬</span>
+              <div class="grow">
+                <h2 id="chat-heading">도와주는 친구</h2>
+                <p id="chat-sub" class="muted small"></p>
+              </div>
+            </div>
+            <div id="chat-empty" class="empty-state">
+              <span class="emoji" aria-hidden="true">🤝</span>
+              <p id="chat-empty-text"></p>
+            </div>
+            <div id="chat-room" hidden>
+              <div id="chat-list" class="chat-list" role="log" aria-live="polite"></div>
+              <form id="chat-form" class="chat-form">
+                <label for="chat-input" class="sr-only">친구에게 보낼 메시지</label>
+                <textarea id="chat-input" class="chat-input" rows="2" maxlength="500" placeholder="친구에게 메시지 보내기"></textarea>
+                <button id="chat-send" class="btn btn-primary" type="submit">보내기</button>
+              </form>
+              <p id="chat-error" class="error" role="alert"></p>
+              <p class="guard small muted">🛡️ 정답 코드는 그대로 보낼 수 없어요. 어디를 왜 고쳐야 하는지 말로 설명해 주세요. (Enter: 보내기 · Shift+Enter: 줄바꿈)</p>
+            </div>
+          </section>
+        </div>
+
+        <section id="history-card" class="card history-card">
+          <div class="panel-head">
+            <span class="icon-tile" aria-hidden="true">🗂️</span>
+            <h2 class="grow">내가 고친 코드들</h2>
+          </div>
+          <ul id="history" class="history"></ul>
+          <p id="history-empty" class="muted" hidden>아직 제출한 코드가 없습니다.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

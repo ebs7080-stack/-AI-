@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>학급 대시보드 - 코드 웹 분석 도구</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/teacher.html">
+      <img src="/logo.svg" alt="" width="32" height="32">
+      <b>PyLearn</b><span>파이썬 버디</span>
+    </a>
+    <div class="topbar-right">
+      <span class="user-chip"><span class="avatar" aria-hidden="true">👩‍🏫</span><span id="who"></span></span>
+      <button id="logout" class="btn btn-secondary" type="button">로그아웃</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="dash-head">
+      <div>
+        <span class="pill">TEACHER</span>
+        <h1>학급 대시보드</h1>
+        <p class="muted">학급 코드 <code id="class-code"></code> · <span id="updated"></span></p>
+      </div>
+      <div class="filters" role="group" aria-label="기간">
+        <button type="button" data-days="7" aria-pressed="true">최근 7일</button>
+        <button type="button" data-days="30" aria-pressed="false">최근 30일</button>
+        <button type="button" data-days="all" aria-pressed="false">전체</button>
+      </div>
+    </section>
+    <p id="dash-error" class="error" role="alert"></p>
+
+    <div id="dash-body" hidden>
+      <section id="kpis" class="kpis" aria-label="요약"></section>
+
+      <section class="card" aria-labelledby="daily-title">
+        <div class="panel-head">
+          <div class="grow">
+            <h2 id="daily-title">날짜별 제출</h2>
+            <p class="sub">하루 동안 학생들이 코드를 제출한 횟수예요. <span id="daily-note"></span></p>
+          </div>
+          <button id="daily-toggle" class="btn btn-secondary btn-sm" type="button" aria-pressed="false">표로 보기</button>
+        </div>
+        <div id="daily-body"></div>
+      </section>
+
+      <section class="card" aria-labelledby="errors-title">
+        <div class="panel-head">
+          <div class="grow">
+            <h2 id="errors-title">많이 만난 오류 유형</h2>
+            <p class="sub">그 오류를 만난 학생 수예요. 같은 코드를 다시 제출해도 한 번으로 세요.</p>
+          </div>
+          <button id="errors-toggle" class="btn btn-secondary btn-sm" type="button" aria-pressed="false">표로 보기</button>
+        </div>
+        <div id="errors-body"></div>
+      </section>
+
+      <section class="card" aria-labelledby="students-title">
+        <div class="panel-head">
+          <div class="grow">
+            <h2 id="students-title">학생별 현황</h2>
+            <p id="students-sub" class="sub"></p>
+          </div>
+        </div>
+        <div id="students-body"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <script src="/dashboard.js"></script>
+</body>
+</html>

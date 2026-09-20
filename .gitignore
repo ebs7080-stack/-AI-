@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.db
+.claude/settings.local.json
+# Claude Code 가 남기는 개인 설정(기기·계정 식별자 포함). 저장소에 올리지 않는다.
+.claude.json
