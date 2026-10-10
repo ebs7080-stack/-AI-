@@ -3,6 +3,8 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+from db.migrate import apply_pending
+
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data.db"
 
 SCHEMA = """
@@ -127,6 +129,8 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         _migrate(conn)
         conn.commit()
+        # 교사 계정·단원·통계 뷰 같은 이후 단계는 db/ 의 마이그레이션이 올린다 (이미 올렸으면 건너뜀).
+        apply_pending(conn)
     finally:
         conn.close()
 

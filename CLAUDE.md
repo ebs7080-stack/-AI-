@@ -27,6 +27,8 @@ python -m venv .venv
 - `app/api.py`: 학급 생성, 입장/퇴장, 코드 제출(스레드에 누적), 힌트 공개, 예전 제출 조회 엔드포인트. `app/auth.py`: 세션 쿠키 → 학생 조회 의존성(`student_for_token`은 WebSocket도 함께 쓴다)과 교사 세션 → 학급 조회 의존성(`current_class`).
 - `app/teacher.py`: 교사 로그인/로그아웃(`/api/teacher/*`)과 대시보드 API. `app/stats.py`: 대시보드 통계 계산(요약·오류 유형별·날짜별·학생별). 라우트는 얇게, SQL 집계는 `stats.py`에 둔다.
 - `app/collab.py`: 화면 상태(`/api/status`), 스레드 조회·완료(`/api/threads*`), 도우미 매칭(`/api/help/start`, `/api/help/{id}/end`), WebSocket 채팅(`/api/help/{id}/ws`). 응답 모양과 접근 권한 규칙(주인 또는 지금 돕는 친구만 본다)은 `app/threads.py`에 모여 있다.
+- `app/teacher_portal.py`: 교사 **계정**(아이디+비밀번호, scrypt) 로그인과 학급별 대시보드 API (`/api/teacher/account/*`, `/api/teacher/classes*`). 한 교사가 학급 여러 개를 맡고(`classes.teacher_id`), 학급 안 학생별 현황·오답률·오답 유형 순위·단원 진도를 `db/migrate_v2_to_v3.sql` 의 뷰(`v_student_stats`, `v_class_case_rank` 등)에서 읽는다. 쿠키는 `cwa_teacher_acct` 로 기존 교사 키 쿠키와 따로다. 남의 학급은 404. 교사 키로 만든 옛 학급은 `POST /api/teacher/classes/claim` 으로 계정에 연결한다. 화면은 `static/classes.html`+`classes.js`.
+- `db/`: 스키마 버전 관리. `schema_v2.sql`(새 DB 기준), `migrate_v1_to_v2/v2_to_v3/v3_to_v4.sql`, `migrate.py`(`apply_pending`), `dashboard_queries.sql`(대시보드 질의 모음). `app/db.py` 의 `init_db()` 가 서버 시작 때 `apply_pending` 을 불러 부족한 단계만 올린다. 스키마를 바꿀 때는 새 `migrate_vN_to_vN+1.sql` 을 만들고 `migrate.py` 의 `STEPS` 에 추가한다 (기존 파일은 고치지 않는다).
 - `app/chat_filter.py`(정답 붙여넣기 차단, 임시 규칙), `app/hub.py`(채팅방 연결 목록과 이벤트 발행).
 - `app/db.py`: SQLite 스키마(`SCHEMA`)와 연결 헬퍼, `_migrate`(스레드 도입 전 DB를 올림). DB 파일은 프로젝트 루트의 `data.db`이며 `CWA_DB_PATH` 환경 변수로 바꾼다. 경로는 호출 시점에 읽으므로 테스트에서 환경 변수만 바꾸면 격리된다.
 - `app/analysis.py`: 코드 분석기의 경계. 웹 계층은 `analyze(code) -> list[Finding]`만 안다. 지금은 화면 흐름 확인용 **임시 분석기**(더미 결과)이고, 정적 분석기는 이 함수 내부만 교체해 붙인다.

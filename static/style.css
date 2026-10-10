@@ -925,3 +925,92 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- 교사 계정: 내 학급·학급 상세 (classes.html) ---------- */
+
+#list-view, #detail-view, #d-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+#d-error:empty, #list-error:empty { display: none; }
+
+.tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 8px; border-radius: 14px; background: var(--surface-mid); }
+.tabs button {
+  flex: 1;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tabs button:hover { background: var(--surface-high); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--primary-ink); box-shadow: var(--shadow-1); }
+
+.class-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.class-card { display: block; padding: 20px; color: inherit; text-decoration: none; transition: box-shadow 0.15s, transform 0.1s; }
+.class-card:hover, .class-card:focus-visible { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.class-card h2 { margin-bottom: 2px; }
+.class-stats { display: grid; gap: 10px; margin: 16px 0 0; }
+.class-stats > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.class-stats dt { color: var(--muted); font-size: 0.8125rem; }
+.class-stats dd { margin: 0; font-size: 0.8125rem; font-weight: 600; text-align: right; }
+
+.two-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.two-col.flat { gap: 24px; }
+.two-col h3 { margin-bottom: 8px; }
+@media (min-width: 900px) { .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.inline-form input[type="text"] { flex: 1 1 200px; width: auto; }
+.stack-form { display: grid; gap: 10px; margin-top: 12px; }
+.unit-add { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.unit-target { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; }
+
+select, input[type="number"] {
+  min-height: 40px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1.5px solid var(--outline);
+  border-radius: 10px;
+}
+select:focus, input[type="number"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--ring); }
+.narrow-input, #unit-target { width: 72px; }
+
+.link-btn {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--primary-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.data tr.selected td { background: var(--surface-low); }
+.data td.actions { text-align: right; }
+.data td.actions .row-actions { display: inline-flex; gap: 8px; }
+.data td .tag { margin-left: 8px; }
+.sub-title { margin: 20px 0 8px; }
+
+/* 값 막대: 색만으로 구분하지 않도록 옆에 숫자를 적는다 */
+.meter { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; }
+.meter .track { flex: 1; min-width: 56px; height: 8px; border-radius: 999px; background: var(--surface-mid); overflow: hidden; }
+.meter .fill { display: block; height: 100%; border-radius: 999px; }
+.meter.progress .fill { background: var(--chart-bar); }
+.meter.warn .fill { background: var(--amber); }
+.meter .val { min-width: 3.2em; font-size: 0.8125rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
+.hbars.ranked .name { display: flex; align-items: center; gap: 8px; }
+.rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary-wash);
+  color: var(--primary-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+}

@@ -8,6 +8,7 @@ from .api import router
 from .collab import router as collab_router
 from .db import init_db
 from .teacher import router as teacher_router
+from .teacher_portal import router as teacher_portal_router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -42,6 +43,7 @@ def health() -> dict[str, str]:
 app.include_router(router)
 app.include_router(collab_router)
 app.include_router(teacher_router)
+app.include_router(teacher_portal_router)
 
 # API 라우트보다 뒤에 마운트해야 /api/* 가 정적 파일에 가려지지 않는다.
 app.mount("/", NoCacheStaticFiles(directory=STATIC_DIR, html=True), name="static")

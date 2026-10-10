@@ -51,22 +51,28 @@ class SubmissionCreate(BaseModel):
         return value  # 들여쓰기가 의미 있으므로 원문 그대로 저장한다.
 
 
-@router.post("/classes", status_code=201)
-def create_class(body: ClassCreate, db: sqlite3.Connection = Depends(get_db)):
+def insert_class(db: sqlite3.Connection, name: str, teacher_id: int | None = None) -> dict:
+    """학급 코드와 교사 키를 만들어 학급을 저장한다. 교사 계정으로 만들면 teacher_id 를 함께 둔다."""
     teacher_key = secrets.token_urlsafe(16)
     for _ in range(10):
         join_code = "".join(secrets.choice(JOIN_CODE_ALPHABET) for _ in range(JOIN_CODE_LENGTH))
         try:
             with db:
-                db.execute(
-                    "INSERT INTO classes (name, join_code, teacher_key_hash) VALUES (?, ?, ?)",
-                    (body.name, join_code, hash_token(teacher_key)),
+                cur = db.execute(
+                    "INSERT INTO classes (name, join_code, teacher_key_hash, teacher_id) VALUES (?, ?, ?, ?)",
+                    (name, join_code, hash_token(teacher_key), teacher_id),
                 )
         except sqlite3.IntegrityError:  # 학급 코드 중복
             continue
         # 교사 키는 해시만 저장하므로 지금 응답에서만 볼 수 있다.
-        return {"name": body.name, "join_code": join_code, "teacher_key": teacher_key}
+        return {"id": cur.lastrowid, "name": name, "join_code": join_code, "teacher_key": teacher_key}
     raise HTTPException(status_code=500, detail="학급 코드를 만들지 못했습니다. 다시 시도해 주세요.")
+
+
+@router.post("/classes", status_code=201)
+def create_class(body: ClassCreate, db: sqlite3.Connection = Depends(get_db)):
+    created = insert_class(db, body.name)
+    return {"name": created["name"], "join_code": created["join_code"], "teacher_key": created["teacher_key"]}
 
 
 @router.post("/join")

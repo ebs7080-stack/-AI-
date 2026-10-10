@@ -10,5 +10,5 @@ def test_static_files_are_always_revalidated(client):
 
 
 def test_html_pages_are_revalidated_too(client):
-    for path in ("/", "/teacher.html", "/dashboard.html", "/style.css"):
+    for path in ("/", "/teacher.html", "/dashboard.html", "/classes.html", "/classes.js", "/style.css"):
         assert client.get(path).headers["cache-control"] == "no-cache", path
