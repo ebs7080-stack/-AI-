@@ -69,13 +69,14 @@ def test_cannot_add_to_someone_elses_thread(student, make_student):
     assert other.post(f"/api/threads/{tid}/finish").status_code == 404
 
 
-def test_thread_is_fixed_when_no_findings_remain(student, monkeypatch):
+def test_thread_stays_open_when_no_findings_remain(student):
+    # 분석기가 아무것도 못 찾았다고 코드가 맞다는 보장은 없으므로, 학생이 직접 끝내야 끝난다.
     tid = submit(student, V1).json()["thread_id"]
-    monkeypatch.setattr(analysis, "analyze", lambda code: [])
-    r = submit(student, V2, tid).json()
-    assert r["thread_status"] == "fixed"
-    assert student.get("/api/status").json()["open_thread_id"] is None
-    assert submit(student, V3, tid).status_code == 409
+    r = submit(student, V2, tid).json()  # 문법 오류를 고친 버전
+    assert r["findings"] == [] and r["thread_status"] == "open"
+    assert student.get("/api/status").json()["open_thread_id"] == tid
+    assert submit(student, V3, tid).status_code == 201  # 계속 고칠 수 있다
+    assert student.post(f"/api/threads/{tid}/finish").json()["status"] == "fixed"
 
 
 def test_finish_thread(student):
@@ -106,7 +107,7 @@ def test_thread_detail_does_not_leak_hidden_hints(student):
     text = student.get(f"/api/threads/{tid}").text
     for step in analysis.analyze(V1)[0].steps:
         assert step.text not in text
-    assert "case_id" not in text and "stub" not in text
+    assert "case_id" not in text and "loop.body_not_indented" not in text
 
 
 def test_threads_require_login(client):

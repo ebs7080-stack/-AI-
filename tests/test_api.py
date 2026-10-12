@@ -1,44 +1,59 @@
 from app import analysis
 from app.analysis import Finding, HintStep
 
-CODE = "for i in range(3):\n    print(i)\n"
+# 반복문 본문을 들여쓰지 않은 코드. 문법 오류라서 분석기가 힌트 3단계를 만든다.
+CODE = "for i in range(3):\nprint(i)\n"
 
 
-def test_create_class(client):
-    r = client.post("/api/classes", json={"name": "1학년 3반"})
-    assert r.status_code == 201
-    body = r.json()
-    assert len(body["join_code"]) == 6
-    assert body["teacher_key"]
+def test_anyone_cannot_create_a_class(client):
+    # 교실은 로그인한 교사만 만든다. 예전의 공개 엔드포인트는 없다.
+    assert client.post("/api/classes", json={"name": "1학년 3반"}).status_code in (404, 405)
+    assert client.post("/api/teacher/classes", json={"name": "1학년 3반"}).status_code == 401
 
 
-def test_create_class_rejects_blank_name(client):
-    assert client.post("/api/classes", json={"name": "   "}).status_code == 422
-
-
-def test_join_sets_session(client, join_code):
+def test_join_sets_session(client, teacher, classroom):
+    teacher.post(
+        f"/api/teacher/classes/{classroom['id']}/students",
+        json={"students": [{"student_no": "10301", "name": "김철수"}]},
+    )
     assert client.get("/api/me").status_code == 401
-    r = client.post("/api/join", json={"join_code": join_code.lower(), "nickname": " 철수 "})
+    r = client.post(
+        "/api/join", json={"join_code": classroom["join_code"].lower(), "student_no": " 10301 "}
+    )
     assert r.status_code == 200
-    assert r.json() == {"nickname": "철수", "class_name": "1학년 3반"}
-    assert client.get("/api/me").json() == {"nickname": "철수", "class_name": "1학년 3반"}
+    profile = r.json()
+    assert profile["student_no"] == "10301" and profile["name"] == "김철수"
+    assert profile["class_name"] == "1학년 3반"
+    assert client.get("/api/me").json() == profile
 
 
-def test_join_unknown_code(client):
-    r = client.post("/api/join", json={"join_code": "ZZZZZZ", "nickname": "철수"})
-    assert r.status_code == 404
+def test_join_rejects_unregistered_number_and_unknown_code_the_same_way(client, enroll):
+    code = enroll("10301")
+    unregistered = client.post("/api/join", json={"join_code": code, "student_no": "10399"})
+    unknown = client.post("/api/join", json={"join_code": "ZZZZZZ", "student_no": "10301"})
+    assert unregistered.status_code == unknown.status_code == 401
+    assert unregistered.json() == unknown.json()  # 어느 쪽이 틀렸는지 알려 주지 않는다.
+    assert client.get("/api/me").status_code == 401
 
 
-def test_join_same_nickname_is_same_student(student, other_client, join_code):
+def test_number_registered_in_another_class_does_not_open_this_class(client, enroll, make_class):
+    enroll("10301")
+    other = make_class("2학년 1반")
+    r = client.post("/api/join", json={"join_code": other["join_code"], "student_no": "10301"})
+    assert r.status_code == 401
+
+
+def test_join_same_number_is_same_student(student, other_client, join_code):
     student.post("/api/submissions", json={"code": CODE})
-    r = other_client.post("/api/join", json={"join_code": join_code, "nickname": "철수"})
+    r = other_client.post("/api/join", json={"join_code": join_code, "student_no": "철수"})
     assert r.status_code == 200
     assert len(other_client.get("/api/submissions").json()) == 1
 
 
-def test_nickname_is_case_insensitive(client, join_code, other_client):
-    client.post("/api/join", json={"join_code": join_code, "nickname": "Kim"})
-    other_client.post("/api/join", json={"join_code": join_code, "nickname": "kim"})
+def test_student_number_is_case_insensitive(client, enroll, other_client):
+    code = enroll("A101")
+    client.post("/api/join", json={"join_code": code, "student_no": "A101"})
+    other_client.post("/api/join", json={"join_code": code, "student_no": "a101"})
     client.post("/api/submissions", json={"code": CODE})
     assert len(other_client.get("/api/submissions").json()) == 1
 
@@ -71,7 +86,7 @@ def test_hints_are_not_revealed_on_submit(student):
     # 공개 전 힌트 본문, case_id, 줄 번호가 응답 어디에도 없어야 한다.
     for step in analysis.analyze(CODE)[0].steps:
         assert step.text not in r.text
-    assert "stub" not in r.text
+    assert "loop.body_not_indented" not in r.text
     assert "case_id" not in r.text
 
 
@@ -93,11 +108,12 @@ def test_reveal_one_step_at_a_time(student):
     assert len(again["revealed"]) == 3
 
 
-def test_cannot_touch_other_students_submission(student, other_client, join_code):
+def test_cannot_touch_other_students_submission(student, other_client, enroll):
     sub = student.post("/api/submissions", json={"code": CODE}).json()
     finding_id = sub["findings"][0]["id"]
 
-    other_client.post("/api/join", json={"join_code": join_code, "nickname": "영희"})
+    r = other_client.post("/api/join", json={"join_code": enroll("영희"), "student_no": "영희"})
+    assert r.status_code == 200
     assert other_client.get(f"/api/submissions/{sub['id']}").status_code == 404
     assert other_client.post(f"/api/findings/{finding_id}/reveal").status_code == 404
     assert other_client.get("/api/submissions").json() == []

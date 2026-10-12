@@ -31,6 +31,14 @@ function el(tag, className, text) {
   return node;
 }
 
+// `백틱`으로 감싼 부분만 코드 모양으로 보여 준다. 모두 textContent 로 넣는다 (HTML 로 해석하지 않음).
+function appendWithCode(node, text) {
+  for (const part of text.split(/(`[^`\n]+`)/)) {
+    if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) node.append(el("code", null, part.slice(1, -1)));
+    else if (part) node.append(document.createTextNode(part));
+  }
+}
+
 function showView(loggedIn) {
   $("join-view").hidden = loggedIn;
   $("main-view").hidden = !loggedIn;
@@ -58,7 +66,7 @@ function formatClock(sqliteUtc) {
 const POLL_MS = 5000;
 
 const state = {
-  me: null, // {nickname, class_name}
+  me: null, // {id, student_no, name, class_name}
   status: null, // GET /api/status
   thread: null, // 화면에 보이는 스레드 (없으면 새 코드 작성 화면)
   threads: [], // 내가 고친 코드 목록
@@ -68,6 +76,7 @@ const state = {
   draftFor: null, // 그 초안이 속한 스레드
   scrolledFor: undefined, // 스트림을 끝까지 넘겨 둔 스레드
   pollTimer: null,
+  helpDeadline: null, // 도움 시간이 끝나는 시각 (이 브라우저의 시계 기준, ms). 닫혀 있으면 null
   chat: { sessionId: null, ws: null, ended: false, messages: [] },
 };
 
@@ -120,6 +129,8 @@ async function refresh(retry = true) {
   const threads = await api("/api/threads");
   if (seq !== refreshSeq) return;
   state.status = status;
+  // 브라우저 시계가 틀릴 수 있어 서버가 준 남은 시간으로 끝나는 시각을 다시 맞춘다.
+  state.helpDeadline = status.help_time.active ? Date.now() + status.help_time.remaining_seconds * 1000 : null;
   state.thread = thread;
   state.threads = threads;
 
@@ -133,6 +144,7 @@ async function refresh(retry = true) {
 
   render();
   syncChat();
+  tickHelpTimer();
 }
 
 function safeRefresh() {
@@ -379,7 +391,9 @@ function renderStep(number, stepState, step) {
   const title = el("div", "step-title");
   if (stepState === "revealed") {
     title.append(el("span", null, step.label), el("span", "step-state", "공개됨"));
-    body.append(title, el("p", "step-text", step.text));
+    const text = el("p", "step-text");
+    appendWithCode(text, step.text);
+    body.append(title, text);
   } else if (stepState === "next") {
     title.append(el("span", null, `힌트 ${number}`), el("span", "step-state", "열 수 있어요"));
     body.append(title);
@@ -441,7 +455,7 @@ function renderFinding(finding, number) {
 
 function hintsKey() {
   const sub = selectedSubmission();
-  return [sub?.id ?? null, sub ? sub.findings.map((f) => [f.id, f.revealed.length, f.total_steps]) : []];
+  return [sub?.id ?? null, sub?.syntax_error ?? false, sub ? sub.findings.map((f) => [f.id, f.revealed.length, f.total_steps]) : []];
 }
 
 function renderHints() {
@@ -464,9 +478,24 @@ function renderHints() {
   box.hidden = false;
   if (sub.findings.length === 0) {
     const empty = el("div", "empty-state");
-    empty.append(el("span", "emoji", "🎉"), el("p", null, "확인할 부분이 발견되지 않았어요."));
+    // 지금 분석기는 문법만 본다. 찾은 것이 없다고 코드가 맞다는 뜻은 아니므로 그렇게 말하지 않는다.
+    empty.append(
+      el("span", "emoji", "✅"),
+      el("p", null, "문법 오류는 찾지 못했어요."),
+      el("p", "small", "지금은 문법만 검사해요. 실행 결과가 생각한 대로인지 직접 확인하고, 다 됐다면 '다 고쳤어요'를 눌러 주세요."),
+    );
     box.append(empty);
     return;
+  }
+  if (sub.syntax_error) {
+    // 문법 오류가 있으면 코드가 한 줄도 실행되지 않으므로, 다른 것보다 이것부터 고쳐야 한다고 먼저 알린다.
+    const notice = el("div", "notice syntax-notice");
+    notice.setAttribute("role", "status");
+    notice.append(
+      el("strong", null, "⚠️ 문법 오류가 있어서 이 코드는 아직 실행되지 않아요."),
+      el("p", null, "파이썬이 코드를 끝까지 읽지 못해서 한 줄도 실행되지 않았어요. 아래 힌트를 보고 이 오류를 먼저 고친 뒤 다시 제출해 주세요."),
+    );
+    box.append(notice);
   }
   sub.findings.forEach((f, i) => box.append(renderFinding(f, i + 1)));
 }
@@ -613,8 +642,8 @@ $("stream-next").addEventListener("click", () => $("stream").scrollBy({ left: 36
 
 function chatSession() {
   const s = state.status;
-  if (s.helping) return { id: s.helping.session_id, peer: s.helping.nickname, role: "helper" };
-  if (s.helped_by) return { id: s.helped_by.session_id, peer: s.helped_by.nickname, role: "owner" };
+  if (s.helping) return { id: s.helping.session_id, peer: s.helping.name, role: "helper" };
+  if (s.helped_by) return { id: s.helped_by.session_id, peer: s.helped_by.name, role: "owner" };
   return null;
 }
 
@@ -638,15 +667,11 @@ function openChat(sessionId) {
 }
 
 function appendBubble(message) {
-  const mine = message.sender.toLowerCase() === state.me.nickname.toLowerCase();
+  const mine = message.sender_id === state.me.id;
   const bubble = el("div", `bubble ${mine ? "mine" : "theirs"}`);
   const meta = el("span", "meta", mine ? formatClock(message.created_at) : `${message.sender} · ${formatClock(message.created_at)}`);
   bubble.append(meta);
-  // `백틱`으로 감싼 부분만 코드 모양으로 보여 준다. 모두 textContent 로 넣는다.
-  for (const part of message.body.split(/(`[^`\n]+`)/)) {
-    if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) bubble.append(el("code", null, part.slice(1, -1)));
-    else if (part) bubble.append(document.createTextNode(part));
-  }
+  appendWithCode(bubble, message.body);
   $("chat-list").append(bubble);
 }
 
@@ -658,6 +683,11 @@ function scrollChatToEnd() {
   const list = $("chat-list");
   list.scrollTop = list.scrollHeight;
 }
+
+const ENDED_NOTES = {
+  fixed: "친구가 코드를 다 고쳤어요. 대화가 끝났어요. 🎉",
+  time: "도움 시간이 끝났어요. 대화가 끝났어요. ⏰",
+};
 
 function handleChatEvent(event) {
   switch (event.type) {
@@ -681,7 +711,7 @@ function handleChatEvent(event) {
       break;
     case "ended":
       state.chat.ended = true;
-      appendSystemNote(event.reason === "fixed" ? "친구가 코드를 다 고쳤어요. 대화가 끝났어요. 🎉" : "대화가 끝났어요.");
+      appendSystemNote(ENDED_NOTES[event.reason] ?? "대화가 끝났어요.");
       scrollChatToEnd();
       $("chat-input").disabled = true;
       $("chat-send").disabled = true;
@@ -722,12 +752,35 @@ function syncChat() {
   } else {
     $("chat-heading").textContent = "도와주는 친구";
     $("chat-sub").textContent = "";
-    $("chat-empty-text").textContent =
-      viewKind() === "own"
-        ? "코드를 완성한 친구가 도와주러 오면 여기서 대화할 수 있어요."
-        : "도와주는 친구가 생기면 여기서 대화할 수 있어요.";
+    if (!state.status.help_time.active) {
+      $("chat-empty-text").textContent = "지금은 도움 시간이 아니에요. 선생님이 도움 시간을 열면 친구와 서로 도울 수 있어요.";
+    } else {
+      $("chat-empty-text").textContent =
+        viewKind() === "own"
+          ? "코드를 완성한 친구가 도와주러 오면 여기서 대화할 수 있어요."
+          : "도와주는 친구가 생기면 여기서 대화할 수 있어요.";
+    }
   }
 }
+
+// 도움 시간이 얼마나 남았는지 1초마다 보여 주고, 다 되면 바로 상태를 다시 확인한다.
+function tickHelpTimer() {
+  const timer = $("help-timer");
+  if (!state.me || state.helpDeadline === null) {
+    timer.hidden = true;
+    return;
+  }
+  const left = Math.ceil((state.helpDeadline - Date.now()) / 1000);
+  if (left <= 0) {
+    state.helpDeadline = null;
+    timer.hidden = true;
+    safeRefresh();
+    return;
+  }
+  timer.textContent = `⏱ 도움 시간 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  timer.hidden = false;
+}
+setInterval(tickHelpTimer, 1000);
 
 function sendChat() {
   const input = $("chat-input");
@@ -776,7 +829,7 @@ function resetState() {
   stopPolling();
   closeChat();
   Object.assign(state, {
-    me: null, status: null, thread: null, threads: [], pinnedThreadId: null, selectedId: null,
+    me: null, status: null, thread: null, threads: [], pinnedThreadId: null, selectedId: null, helpDeadline: null,
     draft: null, draftFor: null, scrolledFor: undefined,
   });
   Object.assign(state.chat, { sessionId: null, ended: false, messages: [] });
@@ -794,7 +847,7 @@ function leaveToJoin(message) {
 async function enterMain(profile) {
   resetState();
   state.me = profile;
-  $("who").textContent = `${profile.class_name} · ${profile.nickname}`;
+  $("who").textContent = `${profile.class_name} · ${profile.name}`;
   actionError("");
   showView(true);
   await refresh();
@@ -807,7 +860,7 @@ $("join-form").addEventListener("submit", async (event) => {
   try {
     const profile = await api("/api/join", {
       method: "POST",
-      body: { join_code: $("join-code").value, nickname: $("nickname").value },
+      body: { join_code: $("join-code").value, student_no: $("student-no").value },
     });
     await enterMain(profile);
   } catch (err) {

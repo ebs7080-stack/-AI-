@@ -1,0 +1,233 @@
+# 오류 case 목록. id 는 Finding.case_id, 단계별 힌트, 교사 통계(FR-3)를 잇는 키다.
+# 지금은 문법 오류(method = "syntax")만 있다. 분류 규칙은 syntax.py, 설계는 docs/static-analysis.md 1단계.
+#
+# 힌트를 쓸 때 지킬 것:
+# - 단계 수는 case 마다 달라도 된다 (2단계 이상). 순서는 관찰 → 의심 지점 → 힌트 → 추가 힌트이고,
+#   필요 없는 단계는 빼도 되지만 '의심 지점'과 '힌트'는 꼭 둔다.
+# - 줄 번호({line})는 '의심 지점'에서 처음 나온다. '관찰'에는 쓰지 않는다.
+# - 문법 오류라 실행되지 않았다는 말은 화면이 힌트 위에 따로 안내하므로 단계마다 되풀이하지 않는다.
+#   '관찰'에는 파이썬이 그 자리에서 무엇을 기대했고 왜 멈췄는지를 그 case 에 맞게 쓴다.
+# - 고친 코드(정답)는 어느 단계에도 쓰지 않는다 (FR-1.4). 빠진 기호나 단어를 직접 말하지 않고,
+#   무엇을 떠올리거나 견줘 보면 되는지를 알려 준다.
+# - 채울 수 있는 값: {line} 오류가 난 줄, {keyword} 그 줄의 첫 단어, {opener} 블록을 연 문장의 종류,
+#   {opener_line} 그 문장의 줄, {char} 문제가 된 글자.
+
+# ---------- 조건문 ----------
+
+[[case]]
+id = "cond.missing_colon"
+category = "조건문"
+label = "조건문 뒤에 콜론을 빠뜨리기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 `{keyword}`로 시작하는 줄을 읽다가 멈췄어요. 그 줄이 어디에서 끝나고 본문이 어디에서 시작하는지 알려 주는 표시를 찾지 못했어요." },
+  { label = "의심 지점", text = "{line}번 줄의 맨 끝을 보세요. 기호 하나가 빠져 있어요." },
+  { label = "힌트", text = "`if`, `elif`, `else`로 시작하는 줄은 언제나 같은 기호로 끝나요. 전에 쓴 조건문이나 교과서 예시의 줄 끝과 견줘 보세요." },
+]
+
+[[case]]
+id = "cond.else_if"
+category = "조건문"
+label = "else if 라고 쓰기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 `else` 바로 뒤에 온 단어를 이해하지 못하고 멈췄어요. `else` 뒤에는 조건을 쓸 수 없어요." },
+  { label = "의심 지점", text = "{line}번 줄을 시작하는 두 단어를 보세요." },
+  { label = "힌트", text = "'그렇지 않고, 만약 ~라면'을 뜻하는 단어가 파이썬에는 따로 하나 있어요. `else`와 `if`를 나란히 쓰는 대신 그 한 단어를 써야 해요." },
+]
+
+[[case]]
+id = "cond.assign_in_if"
+category = "조건문"
+label = "= 와 == 를 혼동하기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 조건을 읽다가 멈췄어요. 조건 자리에는 참인지 거짓인지 물어보는 식이 와야 하는데, 값을 넣으라는 뜻의 기호가 들어 있어요." },
+  { label = "의심 지점", text = "{line}번 줄 `{keyword}` 뒤의 조건에 쓴 `=` 기호를 보세요." },
+  { label = "힌트", text = "`=` 하나는 '오른쪽 값을 왼쪽 변수에 넣어라'는 뜻이에요. '두 값이 서로 같은가?'를 물을 때 쓰는 기호는 따로 있어요." },
+]
+
+[[case]]
+id = "cond.body_not_indented"
+category = "조건문"
+label = "조건문 본문을 들여쓰기 하지 않기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "`{opener}` 줄 다음에는 `{opener}`에 딸린 문장이 와야 하는데, 파이썬이 그런 문장을 찾지 못했어요." },
+  { label = "의심 지점", text = "{opener_line}번 줄 `{opener}` 바로 아래에 있는 {line}번 줄을 보세요. `{opener}`보다 안쪽에서 시작하지 않아요." },
+  { label = "힌트", text = "파이썬은 줄 앞의 빈칸(들여쓰기)을 보고 어떤 문장이 `{opener}`에 딸려 있는지 알아내요. `{opener}`에 딸린 문장은 `{opener}`보다 안쪽에서 시작해야 해요." },
+]
+
+[[case]]
+id = "cond.else_misaligned"
+category = "조건문"
+label = "if 와 else 의 들여쓰기 위치를 맞추지 않기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 `{keyword}`가 어느 `if`와 짝인지 찾지 못하고 멈췄어요." },
+  { label = "의심 지점", text = "{line}번 줄 `{keyword}` 앞의 빈칸 수와, 짝이 되는 `if` 앞의 빈칸 수를 각각 세어 보세요." },
+  { label = "힌트", text = "`{keyword}`는 짝이 되는 `if`와 정확히 같은 위치에서 시작해야 해요. 한 칸만 달라도 파이썬은 짝으로 보지 않아요." },
+]
+
+# ---------- 반복문 ----------
+
+[[case]]
+id = "loop.missing_colon"
+category = "반복문"
+label = "for 문이나 while 문 뒤에 콜론을 빠뜨리기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 `{keyword}`로 시작하는 줄을 읽다가 멈췄어요. 어디까지가 반복 조건이고 어디서부터가 반복할 문장인지 알려 주는 표시를 찾지 못했어요." },
+  { label = "의심 지점", text = "{line}번 줄의 맨 끝을 보세요. 기호 하나가 빠져 있어요." },
+  { label = "힌트", text = "`for`, `while`로 시작하는 줄은 언제나 같은 기호로 끝나요. `if` 줄의 끝에 쓰는 기호와 같아요." },
+]
+
+[[case]]
+id = "loop.body_not_indented"
+category = "반복문"
+label = "반복할 문장이 반복문 안에 들어가지 않게 들여쓰기 하기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "`{opener}` 줄 다음에는 반복할 문장이 와야 하는데, 파이썬이 그런 문장을 찾지 못했어요." },
+  { label = "의심 지점", text = "{opener_line}번 줄 `{opener}` 바로 아래에 있는 {line}번 줄을 보세요. `{opener}`보다 안쪽에서 시작하지 않아요." },
+  { label = "힌트", text = "파이썬은 줄 앞의 빈칸(들여쓰기)을 보고 어떤 문장을 반복할지 알아내요. 반복할 문장은 `{opener}`보다 안쪽에서 시작해야 해요." },
+]
+
+[[case]]
+id = "nested.inner_same_indent"
+category = "중첩 반복문"
+label = "안쪽 반복문을 바깥쪽과 같은 들여쓰기에 쓰기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "반복문 줄 다음에는 그 안에서 반복할 문장이 와야 하는데, 파이썬이 그런 문장을 찾지 못했어요." },
+  { label = "의심 지점", text = "{opener_line}번 줄과 {line}번 줄에 반복문이 하나씩 있어요. 두 줄이 시작하는 위치를 견줘 보세요." },
+  { label = "힌트", text = "두 반복문이 같은 위치에서 시작하면 파이썬은 '안과 밖'이 아니라 서로 상관없는 '위와 아래'로 읽어요. 안쪽 반복문은 바깥쪽 반복문보다 안쪽에서 시작해야 해요." },
+  { label = "추가 힌트", text = "안쪽 반복문을 옮길 때는 그 반복문에 딸린 문장들도 함께 같은 만큼 더 안쪽으로 옮겨야 해요." },
+]
+
+# ---------- 함수 ----------
+
+[[case]]
+id = "func.missing_colon"
+category = "함수"
+label = "함수 정의 뒤에 콜론을 빠뜨리기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 `def`로 시작하는 줄을 읽다가 멈췄어요. 함수 이름과 매개변수 다음에, 여기서부터 본문이라고 알려 주는 표시를 찾지 못했어요." },
+  { label = "의심 지점", text = "{line}번 줄의 맨 끝을 보세요. 기호 하나가 빠져 있어요." },
+  { label = "힌트", text = "`def`로 시작하는 줄도 `if`나 `for` 줄과 같은 기호로 끝나요." },
+]
+
+[[case]]
+id = "func.def_missing_paren"
+category = "함수"
+label = "함수 정의에서 괄호를 빠뜨리기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 함수를 만드는 줄을 읽다가 멈췄어요. 함수 이름 다음에 꼭 와야 하는 것이 빠져 있어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 함수 이름 바로 뒤를 보세요." },
+  { label = "힌트", text = "함수 이름 뒤에는 받을 값(매개변수)을 적는 자리가 꼭 있어야 해요. 받을 값이 하나도 없어도 그 자리는 비워 둔 채로 써 줘야 해요." },
+]
+
+[[case]]
+id = "func.body_not_indented"
+category = "함수"
+label = "함수 본문을 들여쓰기 하지 않기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "`def` 줄 다음에는 함수가 할 일이 와야 하는데, 파이썬이 그런 문장을 찾지 못했어요." },
+  { label = "의심 지점", text = "{opener_line}번 줄 `def` 바로 아래에 있는 {line}번 줄을 보세요. `def`보다 안쪽에서 시작하지 않아요." },
+  { label = "힌트", text = "파이썬은 줄 앞의 빈칸(들여쓰기)을 보고 어디까지가 함수 안인지 알아내요. 함수가 할 일은 `def`보다 안쪽에서 시작해야 해요." },
+]
+
+# ---------- 변수 ----------
+
+[[case]]
+id = "var.name_starts_with_digit"
+category = "변수"
+label = "변수 이름 규칙을 어기기 (숫자로 시작)"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 변수 이름을 읽다가 멈췄어요. 이름이 아니라 숫자가 시작되는 줄 알았는데 뒤에 글자가 이어졌기 때문이에요." },
+  { label = "의심 지점", text = "{line}번 줄에서 `=` 왼쪽에 쓴 이름의 첫 글자를 보세요." },
+  { label = "힌트", text = "변수 이름은 숫자로 시작할 수 없어요. 숫자는 이름의 중간이나 끝에만 쓸 수 있어요." },
+]
+
+[[case]]
+id = "var.name_with_space"
+category = "변수"
+label = "변수 이름 규칙을 어기기 (빈칸 포함)"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 변수 이름을 읽다가 멈췄어요. 이름 하나가 올 자리에 단어가 여러 개 있어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 `=` 왼쪽을 보세요. 단어 사이에 빈칸이 있어요." },
+  { label = "힌트", text = "변수 이름에는 빈칸을 넣을 수 없어요. 파이썬은 빈칸으로 나뉜 단어를 서로 다른 이름으로 읽어요." },
+  { label = "추가 힌트", text = "여러 단어를 이름 하나로 쓰고 싶을 때 빈칸 대신 넣는 기호가 있어요. 교과서나 다른 코드에서 여러 단어로 된 변수 이름을 어떻게 썼는지 떠올려 보세요." },
+]
+
+# ---------- 그 밖의 문법 오류 (오류case.txt 에는 없지만 초보자에게 흔하다) ----------
+
+[[case]]
+id = "syntax.unclosed_bracket"
+category = "문법"
+label = "괄호를 닫지 않기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 코드를 끝까지 읽었는데도 열어 둔 괄호의 짝을 찾지 못했어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 `{char}`로 연 괄호를 보세요." },
+  { label = "힌트", text = "여는 괄호와 닫는 괄호는 개수가 같아야 해요. 그 줄의 괄호를 안쪽부터 하나씩 짝지어 보세요." },
+]
+
+[[case]]
+id = "syntax.unclosed_string"
+category = "문법"
+label = "따옴표를 닫지 않기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 문자열이 어디에서 끝나는지 찾지 못했어요. 따옴표로 시작한 글이 끝나지 않았어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 따옴표로 시작한 부분을 보세요." },
+  { label = "힌트", text = "문자열은 시작할 때 쓴 것과 같은 종류의 따옴표로 끝나야 해요. 작은따옴표로 시작했는지 큰따옴표로 시작했는지 보고, 끝에도 같은 것이 있는지 확인해 보세요." },
+]
+
+[[case]]
+id = "syntax.fullwidth_char"
+category = "문법"
+label = "파이썬이 읽지 못하는 글자 쓰기 (전각 기호 등)"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 알아보지 못하는 글자를 만나서 멈췄어요." },
+  { label = "의심 지점", text = "{line}번 줄에 있는 `{char}` 글자를 보세요. 평소에 쓰던 기호와 모양이 조금 달라요." },
+  { label = "힌트", text = "한글 입력 상태에서 친 괄호·따옴표나 문서에서 복사해 온 기호는 눈으로는 비슷해도 파이썬에게는 다른 글자예요. 그 글자를 지우고 영문 입력 상태에서 다시 쳐 보세요." },
+]
+
+[[case]]
+id = "syntax.unexpected_indent"
+category = "문법"
+label = "필요 없는 곳에 들여쓰기 하기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 들여쓰기가 필요 없는 자리에서 들여쓴 줄을 만나서 멈췄어요." },
+  { label = "의심 지점", text = "{line}번 줄이 바로 윗줄보다 안쪽에서 시작해요. 그런데 윗줄은 `if`, `for`, `def`처럼 딸린 문장을 거느리는 줄이 아니에요." },
+  { label = "힌트", text = "들여쓰기는 어떤 줄에 딸린 문장에만 써요. 이 줄이 딸려 있는 줄이 없다면 윗줄과 같은 위치에서 시작해야 해요." },
+]
+
+[[case]]
+id = "syntax.indent_mismatch"
+category = "문법"
+label = "들여쓰기 위치를 앞의 줄과 맞추지 않기"
+method = "syntax"
+steps = [
+  { label = "관찰", text = "파이썬이 들여쓰기를 줄인 줄을 읽다가 멈췄어요. 그 줄이 시작하는 위치가 위쪽의 어떤 줄과도 맞지 않아요." },
+  { label = "의심 지점", text = "{line}번 줄 앞의 빈칸 수를 세어 보고, 위쪽 줄들의 빈칸 수와 견줘 보세요." },
+  { label = "힌트", text = "같은 묶음에 속한 문장은 모두 똑같은 위치에서 시작해야 해요. 들여쓰기를 줄일 때는 위쪽에 있는 어느 한 줄과 정확히 같은 위치로 돌아가야 해요." },
+]
+
+[[case]]
+id = "syntax.unknown"
+category = "문법"
+label = "그 밖의 문법 오류"
+method = "syntax"
+steps = [
+  { label = "의심 지점", text = "파이썬이 {line}번 줄 근처에서 읽기를 멈췄어요. 원인이 바로 윗줄에 있을 때도 있으니 두 줄을 함께 보세요." },
+  { label = "힌트", text = "괄호와 따옴표의 짝, 줄 끝의 기호, 줄이 시작하는 위치, 낱말의 철자를 하나씩 확인해 보세요." },
+]

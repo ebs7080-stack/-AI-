@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>학급 대시보드 - 코드 웹 분석 도구</title>
+  <title>교실 대시보드 - 코드 웹 분석 도구</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,12 +12,13 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/teacher.html">
+    <a class="brand" href="/classes.html">
       <img src="/logo.svg" alt="" width="32" height="32">
       <b>PyLearn</b><span>파이썬 버디</span>
     </a>
     <div class="topbar-right">
       <span class="user-chip"><span class="avatar" aria-hidden="true">👩‍🏫</span><span id="who"></span></span>
+      <a class="btn btn-secondary" href="/classes.html">← 내 교실</a>
       <button id="logout" class="btn btn-secondary" type="button">로그아웃</button>
     </div>
   </header>
@@ -26,8 +27,8 @@
     <section class="dash-head">
       <div>
         <span class="pill">TEACHER</span>
-        <h1>학급 대시보드</h1>
-        <p class="muted">학급 코드 <code id="class-code"></code> · <span id="updated"></span></p>
+        <h1>교실 대시보드</h1>
+        <p class="muted">교실 코드 <code id="class-code"></code> · <span id="updated"></span></p>
       </div>
       <div class="filters" role="group" aria-label="기간">
         <button type="button" data-days="7" aria-pressed="true">최근 7일</button>
@@ -38,6 +39,16 @@
     <p id="dash-error" class="error" role="alert"></p>
 
     <div id="dash-body" hidden>
+      <section class="card" aria-labelledby="help-time-title">
+        <div class="panel-head">
+          <div class="grow">
+            <h2 id="help-time-title">도움 시간</h2>
+            <p class="sub">코드 제출과 힌트는 언제나 되고, 친구 도와주러 가기와 채팅은 도움 시간 동안만 돼요. 시간이 끝나면 하던 대화도 끝나요. 이름을 가리면 짝이 된 학생들에게 서로 "익명"으로 보여요.</p>
+          </div>
+        </div>
+        <div id="help-time-slot"></div>
+      </section>
+
       <section id="kpis" class="kpis" aria-label="요약"></section>
 
       <section class="card" aria-labelledby="daily-title">
@@ -75,6 +86,7 @@
   </main>
 
   <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <script src="/helptime.js"></script>
   <script src="/dashboard.js"></script>
 </body>
 </html>

@@ -33,13 +33,13 @@
             <span class="badge">STUDENT</span>
           </div>
           <h2 id="join-title">수업 입장하기 ✨</h2>
-          <p class="muted">선생님께 받은 학급 코드와 닉네임을 입력하세요.</p>
+          <p class="muted">선생님께 받은 교실 코드와 내 학번을 입력하세요.</p>
           <form id="join-form" class="grow">
-            <label for="join-code">학급 코드</label>
+            <label for="join-code">교실 코드</label>
             <input id="join-code" type="text" maxlength="20" autocomplete="off" required>
-            <label for="nickname">닉네임</label>
-            <input id="nickname" type="text" maxlength="20" autocomplete="off" required>
-            <p class="muted small" style="margin-top:10px">다시 입장할 때는 같은 닉네임을 입력하면 이전 기록이 이어집니다.</p>
+            <label for="student-no">학번</label>
+            <input id="student-no" type="text" maxlength="20" autocomplete="off" required>
+            <p class="muted small" style="margin-top:10px">선생님이 교실에 등록해 준 학번으로만 입장할 수 있어요. 다시 입장하면 이전 기록이 이어집니다.</p>
             <button class="btn btn-primary btn-block" type="submit">입장하기 →</button>
             <p id="join-error" class="error" role="alert"></p>
           </form>
@@ -51,11 +51,11 @@
             <span class="badge amber">TEACHER</span>
           </div>
           <h2 id="teacher-title">교사로 시작하기</h2>
-          <p class="muted">학급을 만들고, 학생들이 어려워하는 부분을 대시보드에서 확인하세요.</p>
+          <p class="muted">교실을 만들고, 학생들이 어려워하는 부분을 대시보드에서 확인하세요.</p>
           <ul class="features amber grow">
-            <li>학급 코드를 학생들에게 알려 주세요</li>
-            <li>교사 키는 학급을 만들 때 한 번만 보여 드려요</li>
-            <li>교사 키로 학급 대시보드에 들어갈 수 있어요</li>
+            <li>회원 가입 후 교실을 여러 개 만들 수 있어요</li>
+            <li>교실마다 학생들의 학번을 미리 등록해요</li>
+            <li>교실 코드를 학생들에게 알려 주세요</li>
           </ul>
           <a class="btn btn-amber btn-block" href="/teacher.html">교사 페이지 열기 →</a>
         </section>
@@ -146,6 +146,7 @@
                 <h2 id="chat-heading">도와주는 친구</h2>
                 <p id="chat-sub" class="muted small"></p>
               </div>
+              <span id="help-timer" class="chip" role="timer" hidden></span>
             </div>
             <div id="chat-empty" class="empty-state">
               <span class="emoji" aria-hidden="true">🤝</span>

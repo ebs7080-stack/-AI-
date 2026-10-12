@@ -1,6 +1,9 @@
 import sqlite3
 
+from fastapi.testclient import TestClient
+
 from app.db import init_db
+from app.main import app
 
 # 스레드가 생기기 전의 스키마 (submissions 에 thread_id 가 없다).
 LEGACY_SCHEMA = """
@@ -40,3 +43,41 @@ def test_legacy_submissions_are_moved_into_dropped_threads(tmp_path, monkeypatch
     linked = conn.execute("SELECT thread_id FROM submissions ORDER BY id").fetchall()
     assert [r["thread_id"] for r in linked] == [threads[0]["id"], threads[1]["id"]]
     conn.close()
+
+
+def test_teacher_key_and_nickname_db_is_moved_to_accounts_and_student_numbers(tmp_path, monkeypatch):
+    path = tmp_path / "legacy.db"
+    monkeypatch.setenv("CWA_DB_PATH", str(path))
+    conn = sqlite3.connect(path)
+    conn.executescript(LEGACY_SCHEMA)
+    # 교사 키로 로그인하던 시절의 세션 (교실 하나에 묶여 있다).
+    conn.execute(
+        "CREATE TABLE teacher_sessions (token_hash TEXT PRIMARY KEY, "
+        "class_id INTEGER NOT NULL REFERENCES classes(id), "
+        "created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+    )
+    conn.execute("INSERT INTO classes (name, join_code, teacher_key_hash) VALUES ('반', 'ABC234', 'x')")
+    conn.execute("INSERT INTO students (class_id, nickname) VALUES (1, '철수')")
+    conn.execute("INSERT INTO teacher_sessions (token_hash, class_id) VALUES ('t', 1)")
+    conn.execute("INSERT INTO submissions (student_id, code) VALUES (1, 'a = 1')")
+    conn.commit()
+    conn.close()
+
+    init_db()
+    init_db()  # 두 번 실행해도 된다
+
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    cls = dict(conn.execute("SELECT * FROM classes").fetchone())
+    assert "teacher_key_hash" not in cls and cls["teacher_id"] is None  # 주인 없는 교실로 남는다
+    student = conn.execute("SELECT student_no, name FROM students").fetchone()
+    assert (student["student_no"], student["name"]) == ("철수", "철수")
+    assert conn.execute("SELECT COUNT(*) FROM teacher_sessions").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM submissions").fetchone()[0] == 1  # 기록은 그대로다
+    conn.close()
+
+    # 예전 학생은 쓰던 닉네임을 학번 삼아 그대로 들어온다.
+    with TestClient(app) as c:
+        r = c.post("/api/join", json={"join_code": "ABC234", "student_no": "철수"})
+        assert r.status_code == 200
+        assert len(c.get("/api/submissions").json()) == 1

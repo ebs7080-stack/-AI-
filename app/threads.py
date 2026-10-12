@@ -8,6 +8,21 @@ import difflib
 import json
 import sqlite3
 
+from . import analysis
+
+
+# 교사가 이름 가리기를 켠 교실에서 짝에게 이름 대신 보여 주는 말.
+ANONYMOUS = "익명"
+
+
+def peer_name(db: sqlite3.Connection, student_id: int) -> str:
+    """도움 짝에게 보여 줄 그 학생의 이름. 교실이 이름 가리기를 켰으면 누구인지 알려 주지 않는다."""
+    row = db.execute(
+        "SELECT st.name, c.hide_names FROM students st JOIN classes c ON c.id = st.class_id WHERE st.id = ?",
+        (student_id,),
+    ).fetchone()
+    return ANONYMOUS if row["hide_names"] else row["name"]
+
 
 def finding_out(row: sqlite3.Row) -> dict:
     # 공개되지 않은 힌트 본문과 case_id, 줄 번호는 응답에 절대 넣지 않는다 (FR-1.5).
@@ -21,13 +36,15 @@ def finding_out(row: sqlite3.Row) -> dict:
 
 def submission_out(db: sqlite3.Connection, submission: sqlite3.Row) -> dict:
     findings = db.execute(
-        "SELECT id, steps_json, revealed_steps FROM findings WHERE submission_id = ? ORDER BY id",
+        "SELECT id, case_id, steps_json, revealed_steps FROM findings WHERE submission_id = ? ORDER BY id",
         (submission["id"],),
     ).fetchall()
     return {
         "id": submission["id"],
         "code": submission["code"],
         "created_at": submission["created_at"],
+        # 문법 오류라 코드가 아예 실행되지 않는다는 사실만 알린다. 어떤 오류인지(case_id)와 줄은 힌트를 열어야 나온다.
+        "syntax_error": any(analysis.is_syntax_case(f["case_id"]) for f in findings),
         "findings": [finding_out(f) for f in findings],
     }
 
@@ -58,14 +75,11 @@ def thread_out(db: sqlite3.Connection, thread: sqlite3.Row, viewer_id: int) -> d
         item["diff"] = None if previous is None else diff_lines(previous, row["code"])
         previous = row["code"]
         submissions.append(item)
-    owner = db.execute(
-        "SELECT nickname FROM students WHERE id = ?", (thread["student_id"],)
-    ).fetchone()
     return {
         "id": thread["id"],
         "status": thread["status"],
         "created_at": thread["created_at"],
-        "owner": owner["nickname"],
+        "owner": peer_name(db, thread["student_id"]),
         "is_owner": thread["student_id"] == viewer_id,
         "submissions": submissions,
     }

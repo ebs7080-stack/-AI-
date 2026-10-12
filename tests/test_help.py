@@ -21,6 +21,12 @@ def finish_own_code(client, code="a = 1\n"):
     assert client.post(f"/api/threads/{tid}/finish").status_code == 200
 
 
+@pytest.fixture(autouse=True)
+def help_time(open_help_time):
+    """이 파일의 테스트는 도움 시간이 열린 교실에서 시작한다. 닫힌 경우는 test_help_time.py 가 본다."""
+    open_help_time()
+
+
 @pytest.fixture
 def pair(student, make_student):
     """철수(도움이 필요함, 코드를 고치는 중)와 그를 돕는 영희."""
@@ -56,29 +62,32 @@ def test_start_without_anyone_to_help(student):
 
 def test_start_matches_a_classmate(pair):
     b, helper, thread, matched = pair
-    assert matched["nickname"] == "철수" and matched["thread_id"] == thread["thread_id"]
+    assert matched["name"] == "철수" and matched["thread_id"] == thread["thread_id"]
     assert helper.get("/api/status").json()["helping"]["session_id"] == matched["session_id"]
     helped_by = b.get("/api/status").json()["helped_by"]
-    assert helped_by == {"session_id": matched["session_id"], "nickname": "영희"}
+    assert helped_by == {"session_id": matched["session_id"], "name": "영희"}
 
 
-def test_never_matches_another_class(student, make_student):
+def test_never_matches_another_class(student, make_student, make_class, open_help_time):
     submit(student)
-    other_class = student.post("/api/classes", json={"name": "2학년 1반"}).json()["join_code"]
-    outsider = make_student("영희", code=other_class)
+    other_class = make_class("2학년 1반")
+    open_help_time(cls=other_class)
+    outsider = make_student("영희", cls=other_class)
     finish_own_code(outsider)
     assert outsider.post("/api/help/start").status_code == 404
 
 
-def test_one_helper_per_thread_and_no_repeat_match(pair, make_student):
+def test_one_helper_per_thread_and_rematch_is_allowed(pair, make_student):
     b, helper, thread, matched = pair
     third = make_student("민수")
     finish_own_code(third)
     assert third.post("/api/help/start").status_code == 404  # 이미 도우미가 있다
 
     assert helper.post(f"/api/help/{matched['session_id']}/end").status_code == 204
-    assert helper.post("/api/help/start").status_code == 404  # 방금 도운 친구와 바로 다시 짝이 되지 않는다
-    assert third.post("/api/help/start").status_code == 200  # 다른 친구는 도울 수 있다
+    # 매칭은 완전히 무작위라, 방금 도운 친구와도 다시 짝이 될 수 있다.
+    again = helper.post("/api/help/start")
+    assert again.status_code == 200 and again.json()["session_id"] != matched["session_id"]
+    assert again.json()["thread_id"] == thread["thread_id"]
 
 
 def test_cannot_help_twice_or_while_own_code_is_open(pair):

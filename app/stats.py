@@ -178,7 +178,7 @@ def _daily(db: sqlite3.Connection, p: dict, start: date | None, today: date) -> 
 def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
     rows = db.execute(
         """
-        SELECT st.id, st.nickname,
+        SELECT st.id, st.student_no, st.name,
             (SELECT COUNT(*) FROM submissions s
               WHERE s.student_id = st.id AND s.created_at >= :cutoff) AS submissions,
             (SELECT COUNT(*) FROM threads t
@@ -234,7 +234,8 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
         last = row["last_submission_at"]
         result.append(
             {
-                "nickname": row["nickname"],
+                "student_no": row["student_no"],
+                "name": row["name"],
                 "state": state,
                 "current_attempts": current["attempts"] if current else None,
                 "current_minutes": (
@@ -249,5 +250,5 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
             }
         )
     # 오래 붙잡고 있는 학생이 맨 위로 오게 한다. 수업 중에 가장 먼저 봐야 하는 정보다.
-    result.sort(key=lambda s: (STATE_ORDER[s["state"]], -(s["current_minutes"] or 0), s["nickname"].lower()))
+    result.sort(key=lambda s: (STATE_ORDER[s["state"]], -(s["current_minutes"] or 0), s["student_no"].lower()))
     return result

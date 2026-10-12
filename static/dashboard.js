@@ -13,7 +13,10 @@ let showDailyTable = false;
 let showErrorsTable = false;
 let loading = false;
 
-// 서버에서 온 값(닉네임, 오류 이름 등)은 항상 textContent 로 넣는다. innerHTML 은 쓰지 않는다.
+// 어느 교실의 대시보드인지는 주소의 ?class= 로 받는다. 없으면 교실 목록으로 돌아간다.
+const classId = Number(new URLSearchParams(location.search).get("class"));
+
+// 서버에서 온 값(학생 이름, 오류 이름 등)은 항상 textContent 로 넣는다. innerHTML 은 쓰지 않는다.
 function el(tag, opts = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(opts)) {
@@ -242,7 +245,7 @@ function renderDaily() {
 /* ---------- 오류 유형 (가로 막대) ---------- */
 
 function errorBars(errors) {
-  // 막대 길이는 학급 전체 학생 수 대비 비율이라, 학급 규모와 상관없이 같은 기준으로 읽힌다.
+  // 막대 길이는 교실 전체 학생 수 대비 비율이라, 교실 규모와 상관없이 같은 기준으로 읽힌다.
   const scale = Math.max(data.summary.students_total, errors[0].students, 1);
   const shown = errors.slice(0, MAX_ERROR_BARS);
   const list = el("ul", { class: "hbars" });
@@ -320,7 +323,7 @@ function renderStudents() {
 
   if (students.length === 0) {
     $("students-body").replaceChildren(
-      emptyState("🚪", `아직 입장한 학생이 없어요. 학급 코드 ${data.class.join_code} 를 학생들에게 알려 주세요.`)
+      emptyState("🚪", "아직 등록한 학생이 없어요. 내 교실 화면에서 학생들의 학번을 등록해 주세요.")
     );
     return;
   }
@@ -328,7 +331,8 @@ function renderStudents() {
     el(
       "tr",
       {},
-      el("td", { text: s.nickname }),
+      el("td", {}, el("code", { text: s.student_no })),
+      el("td", { text: s.name === s.student_no ? "–" : s.name }),
       stateCell(s),
       el("td", { class: "num", text: String(s.submissions) }),
       el("td", { class: "num", text: String(s.fixed) }),
@@ -339,16 +343,21 @@ function renderStudents() {
     )
   );
   $("students-body").replaceChildren(
-    tableWrap(["닉네임", "지금 상태", "제출", "다 고침", "그만둠", "도와줌", "도움 받음", "마지막 제출"], rows, [2, 3, 4, 5, 6])
+    tableWrap(["학번", "이름", "지금 상태", "제출", "다 고침", "그만둠", "도와줌", "도움 받음", "마지막 제출"], rows, [3, 4, 5, 6, 7])
   );
 }
 
 /* ---------- 불러오기 ---------- */
 
+const helpTime = classId ? createHelpTimeControl(classId) : null;
+if (helpTime) $("help-time-slot").append(helpTime.node);
+
 function render() {
   $("who").textContent = data.class.name;
   $("class-code").textContent = data.class.join_code;
   $("updated").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })} 기준`;
+  helpTime.update(data.help_time);
+  helpTime.setHideNames(data.class.hide_names);
   renderKpis(data.summary);
   renderDaily();
   renderErrors();
@@ -363,12 +372,16 @@ async function load({ dim }) {
   try {
     let res;
     try {
-      res = await fetch(`/api/teacher/dashboard${days ? `?days=${days}` : ""}`);
+      res = await fetch(`/api/teacher/classes/${classId}/dashboard${days ? `?days=${days}` : ""}`);
     } catch {
       throw new Error("서버에 연결하지 못했어요. 서버가 켜져 있는지 확인해 주세요. (start.bat)");
     }
     if (res.status === 401) {
       location.href = "/teacher.html"; // 로그인이 풀렸으면 다시 로그인한다.
+      return;
+    }
+    if (res.status === 404) {
+      location.href = "/classes.html"; // 내 교실이 아니거나 없는 교실이다.
       return;
     }
     if (!res.ok) throw new Error("통계를 불러오지 못했어요. 잠시 뒤에 다시 시도해 주세요.");
@@ -411,7 +424,8 @@ $("logout").addEventListener("click", async () => {
 
 window.addEventListener("scroll", hideTip, { passive: true });
 
-load({ dim: false });
+if (!classId) location.replace("/classes.html");
+else load({ dim: false });
 setInterval(() => {
-  if (!document.hidden) load({ dim: false });
+  if (!document.hidden && classId) load({ dim: false });
 }, REFRESH_MS);

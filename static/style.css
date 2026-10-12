@@ -187,7 +187,7 @@ input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
 
 input::placeholder, textarea::placeholder { color: var(--subtle); }
 
-#join-code, #login-code { text-transform: uppercase; letter-spacing: 0.15em; font-family: var(--mono); }
+#join-code { text-transform: uppercase; letter-spacing: 0.15em; font-family: var(--mono); }
 
 textarea {
   display: block;
@@ -590,7 +590,9 @@ textarea {
   cursor: default;
 }
 .version.compose:hover { box-shadow: none; }
-.version.compose textarea { min-height: 220px; background: var(--surface); }
+/* 코드를 쓰는 칸은 지난 버전 카드보다 넓고 길게 잡아 한눈에 여러 줄이 보이게 한다. */
+.version.compose { width: min(640px, 84vw); max-width: 100%; }
+.version.compose textarea { min-height: 440px; background: var(--surface); }
 .version.compose .btn { width: 100%; }
 .version.compose .hint-line { color: var(--subtle); font-size: 0.8125rem; }
 .version.compose .error { margin: 0; }
@@ -656,6 +658,13 @@ textarea {
 
 .result-title { margin-bottom: 4px; color: var(--primary-ink); font-size: 0.8125rem; font-weight: 600; }
 
+/* 힌트가 길어져도 카드가 끝없이 늘어나지 않게 이 안에서 스크롤한다. 여백은 포커스 테두리가 잘리지 않게 둔 것이다. */
+#findings { max-height: min(68vh, 620px); margin: -4px; padding: 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+
+.syntax-notice { margin-top: 0; }
+.syntax-notice strong { display: block; margin-bottom: 4px; }
+.syntax-notice p { color: var(--muted); font-size: 0.875rem; }
+
 .finding { margin-top: 12px; padding: 16px; border-radius: 16px; background: var(--surface-low); }
 .finding-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .progress {
@@ -693,6 +702,7 @@ textarea {
 .step-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; line-height: 1.75rem; }
 .step-state { color: var(--green-ink); font-size: 0.75rem; font-weight: 600; }
 .step-text { margin-top: 2px; color: var(--muted); overflow-wrap: anywhere; }
+.step-text code { padding: 1px 6px; border-radius: 6px; background: var(--surface-mid); color: var(--text); font-size: 0.85em; }
 
 .step.next { background: var(--amber-wash); }
 .step.next .step-num { background: var(--amber); color: var(--amber-ink); }
@@ -924,4 +934,90 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- 교사: 내 교실·학생 명단 ---------- */
+
+.class-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.class-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
+.class-card-head .grow { flex: 1 1 220px; min-width: 0; }
+.class-card-head h2 { overflow-wrap: anywhere; }
+.class-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.join-code { color: var(--primary-ink); font-size: 1rem; font-weight: 600; letter-spacing: 0.12em; }
+
+.roster { display: grid; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+.roster form .btn, #create-form .btn { margin-top: 12px; }
+.password-form { max-width: 420px; }
+.password-form .btn { margin-top: 16px; }
+.password-form [role="status"] { margin-top: 12px; color: var(--green-ink); font-weight: 500; }
+.password-form [role="status"]:empty { margin: 0; }
+.roster-input { min-height: 120px; }
+.roster-help { margin-top: 8px; }
+.roster .error:empty, .roster .roster-note:empty, .class-card > .error:empty { display: none; }
+
+/* ---------- 교사: 도움 시간 조절기 ---------- */
+
+.help-time { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.class-card .help-time { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.help-time-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.help-time-clock { font-family: var(--mono); font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.help-time-clock:empty { display: none; }
+.help-time-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.help-time-minutes {
+  width: 76px;
+  height: 36px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1.5px solid var(--outline);
+  border-radius: 10px;
+}
+.help-time-minutes:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--ring); }
+.help-time-end { color: var(--danger); }
+.help-time .error { flex: 1 0 100%; margin: 0; }
+.help-time .error:empty { display: none; }
+
+/* 학생 화면: 남은 도움 시간 */
+#help-timer { flex: none; white-space: nowrap; background: var(--green-wash); color: var(--green-ink); font-weight: 600; }
+
+.help-time-option { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+.help-time-option input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); }
+
+/* ---------- 교사: 오류별 힌트 편집 ---------- */
+
+.hint-guide { margin-top: 0; }
+.hint-guide ul { display: grid; gap: 6px; padding-left: 20px; font-size: 0.875rem; }
+.hint-guide code, .hint-places code { padding: 1px 6px; border-radius: 6px; background: var(--surface); }
+
+.hint-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.hint-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.hint-group h2 { margin-bottom: 4px; }
+
+.hint-case { padding: 0; }
+.hint-case summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-radius: inherit; cursor: pointer; list-style: none; }
+.hint-case summary::-webkit-details-marker { display: none; }
+.hint-case summary::before { content: "▸"; color: var(--subtle); }
+.hint-case[open] summary::before { content: "▾"; }
+.hint-case summary:focus-visible { outline: 3px solid var(--ring); outline-offset: -3px; }
+.hint-case-title { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.hint-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 4px 20px 20px; }
+.hint-places { line-height: 1.9; }
+
+.hint-steps { display: grid; gap: 12px; }
+.hint-step { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 14px; border-radius: 16px; background: var(--surface-low); }
+.hint-step .step-num { margin-top: 4px; }
+.hint-step-fields label:first-child { margin-top: 0; }
+.hint-step-fields input[type="text"] { height: 40px; max-width: 220px; }
+.hint-text { min-height: 84px; padding: 10px 14px; background: var(--surface); border-color: var(--outline); border-radius: 12px; font-family: var(--font); font-size: 0.9375rem; line-height: 1.6; }
+
+.hint-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint-actions .btn-primary { margin-left: auto; min-width: 96px; }
+.hint-status:empty, .hint-form .error:empty { display: none; }
+.hint-form .error { margin: 0; }
+
+@media (max-width: 520px) {
+  .hint-step { grid-template-columns: minmax(0, 1fr); }
+  .hint-step .step-num { display: none; }
+  .hint-step > .btn { justify-self: end; }
 }
