@@ -39,7 +39,9 @@ python -m venv .venv
 ## GitHub 협업
 
 - 이 폴더(`project/`)는 자체 git 저장소다. 홈 폴더(`C:\Users\강주형`)도 별도 저장소이고 그 원격(`aruino_lmn`)은 아두이노용이라서 **홈에서는 push 하지 않는다.**
-- 원격 `origin`은 팀 저장소 `https://github.com/ebs7080-stack/-AI-`(7조 AI_CODE_FEEDBACK_AGENT)다. 팀 `main`에는 README와 설계 문서(docx 2개)가 있다. 내 작업은 브랜치 `feature/pylearn-web-app`에 올렸고 `main`은 건드리지 않았다. `main` 반영은 PR(`.../pull/new/feature/pylearn-web-app`)로 하고, `main` 직접 push나 force push는 사용자 확인 없이 하지 않는다.
+- 원격 `origin`은 팀 저장소 `https://github.com/ebs7080-stack/-AI-`(7조 AI_CODE_FEEDBACK_AGENT)다. 팀 `main`에는 README와 설계 문서(docx 2개)가 있다. `main`은 건드리지 않았다. `main` 반영은 PR로 하고, `main` 직접 push나 force push는 사용자 확인 없이 하지 않는다.
+- **지금 작업 브랜치는 `feature/student-number-login`이다** (2026-10-12부터, PR: `.../pull/new/feature/student-number-login`). 교사 계정·학번 로그인, 도움 시간, 문법 오류 피드백, 힌트 문구 편집이 여기에 있다.
+- 예전 브랜치 `feature/pylearn-web-app`의 원격에는 다른 세션이 올린 커밋 2개(`5190c84`, `3fa0f0b`: `app/teacher_portal.py`, `db/` 마이그레이션 v1→v4, 단원·진도 관리, 학생별 오답률)가 있다. 같은 교사 계정 기능을 다른 방식으로 구현한 것이라 이 브랜치와 `teachers` 테이블, `classes.teacher_id`, `static/classes.html`·`classes.js`, `/api/teacher/classes`가 충돌한다(그쪽은 교사 키와 닉네임 입장을 유지한다). 그래서 그 브랜치에 push 하지 않고 새 브랜치를 만들었다. **두 작업을 어떻게 합칠지는 아직 정하지 않았다** — `main`에 넣기 전에 사용자와 정한다. 로컬의 `feature/pylearn-web-app`은 원격보다 1개 앞서고 2개 뒤처져 있으니 거기서 push 하지 않는다.
 - `data.db`(학생 닉네임 등)와 `.claude.json`(개인 설정)은 `.gitignore`에 있다. 절대 커밋하지 않는다.
 - GitHub는 코드만 보관하고 앱을 실행하지 않는다. 온라인 배포를 하려면 영구 디스크, 서버 프로세스 1개(채팅 허브가 메모리), HTTPS·`Secure` 쿠키, 교사 가입 제한(지금은 누구나 가입)과 로그인 시도 제한이 먼저 필요하다.
 - `claude-mem` 플러그인이 설치돼 있다(요금제 기반·로컬 전용·텔레메트리 꺼짐). 폴더별 `CLAUDE.md`를 자동 생성할 수 있으니 `git status`로 확인하고 팀 저장소에 올리지 않는다. 제거는 `npx claude-mem uninstall`.
