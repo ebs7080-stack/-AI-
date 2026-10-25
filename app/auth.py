@@ -103,7 +103,7 @@ def owned_class(
 ) -> sqlite3.Row:
     """경로의 교실이 로그인한 교사의 것인지 확인한다. 남의 교실은 존재 여부도 숨기려고 404 로 응답한다."""
     row = db.execute(
-        "SELECT id, name, join_code, hide_names FROM classes WHERE id = ? AND teacher_id = ?",
+        "SELECT id, name, join_code, hide_names, current_unit_id FROM classes WHERE id = ? AND teacher_id = ?",
         (class_id, teacher["id"]),
     ).fetchone()
     if row is None:

@@ -25,7 +25,7 @@ from .auth import (
 from . import helptime, hints
 from .db import get_db
 from .hub import publish
-from .stats import class_dashboard
+from .stats import class_dashboard, unit_progress
 
 router = APIRouter(prefix="/api/teacher")
 
@@ -34,6 +34,10 @@ JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 JOIN_CODE_LENGTH = 6
 
 MAX_ROSTER_BATCH = 200  # 한 번에 등록할 수 있는 학생 수
+
+MAX_UNIT_TITLE = 40  # 단원 이름 길이
+MAX_TARGET_FIXED = 50  # 한 단원의 목표 개수 상한
+UNIT_STATUSES = ("planned", "active", "done")  # DB 의 CHECK 와 같아야 한다
 
 
 def _not_blank(value: str) -> str:
@@ -68,6 +72,37 @@ class HelpTimeAdd(BaseModel):
 class ClassSettings(BaseModel):
     # 도움 짝이 된 학생들에게 서로의 이름을 가릴지.
     hide_names: bool
+
+
+class UnitCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=MAX_UNIT_TITLE)
+    # 이 단원에서 학생 한 명이 다 고쳐야 하는 코드 개수, 곧 진도 100% 의 기준.
+    target_fixed: int = Field(default=1, ge=1, le=MAX_TARGET_FIXED)
+
+    _strip_title = field_validator("title")(_not_blank)
+
+
+class UnitEdit(BaseModel):
+    """보낸 항목만 바꾼다. 안 보낸 항목은 그대로 둔다."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=MAX_UNIT_TITLE)
+    target_fixed: int | None = Field(default=None, ge=1, le=MAX_TARGET_FIXED)
+    status: str | None = None
+    position: int | None = Field(default=None, ge=0, le=999)
+
+    _strip_title = field_validator("title")(lambda v: v if v is None else _not_blank(v))
+
+    @field_validator("status")
+    @classmethod
+    def _known_status(cls, value):
+        if value is not None and value not in UNIT_STATUSES:
+            raise ValueError("단원 상태는 planned, active, done 중 하나여야 합니다.")
+        return value
+
+
+class CurrentUnit(BaseModel):
+    # null 을 보내면 '지금 수업하는 단원 없음' 이 된다.
+    unit_id: int | None = None
 
 
 class HintStepEdit(BaseModel):
@@ -244,6 +279,7 @@ def _class_out(cls: sqlite3.Row) -> dict:
         "name": cls["name"],
         "join_code": cls["join_code"],
         "hide_names": bool(cls["hide_names"]),
+        "current_unit_id": cls["current_unit_id"],
     }
 
 
@@ -251,8 +287,9 @@ def _class_out(cls: sqlite3.Row) -> dict:
 def list_classes(db: sqlite3.Connection = Depends(get_db), teacher: sqlite3.Row = Depends(current_teacher)):
     rows = db.execute(
         """
-        SELECT c.id, c.name, c.join_code, c.hide_names,
-               (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id) AS student_count
+        SELECT c.id, c.name, c.join_code, c.hide_names, c.current_unit_id,
+               (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id) AS student_count,
+               (SELECT u.title FROM units u WHERE u.id = c.current_unit_id) AS current_unit_title
         FROM classes c WHERE c.teacher_id = ? ORDER BY c.id DESC
         """,
         (teacher["id"],),
@@ -260,6 +297,7 @@ def list_classes(db: sqlite3.Connection = Depends(get_db), teacher: sqlite3.Row 
     return [
         {
             **_class_out(row),
+            "current_unit_title": row["current_unit_title"],
             "student_count": row["student_count"],
             "help_time": helptime.state(db, row["id"]),
         }
@@ -405,6 +443,126 @@ def end_help_time(db: sqlite3.Connection = Depends(get_db), cls: sqlite3.Row = D
     for session_id in helptime.close_expired(db, cls["id"]):
         publish(session_id, {"type": "ended", "reason": "time"})
     return helptime.state(db, cls["id"])
+
+
+# ---------- 수업 단원과 진도 ----------
+
+
+def _owned_unit(db: sqlite3.Connection, class_id: int, unit_id: int) -> sqlite3.Row:
+    """그 교실의 단원인지 확인한다. 다른 교실의 단원은 없는 것으로 본다."""
+    row = db.execute(
+        "SELECT id, title, position, status, target_fixed FROM units WHERE id = ? AND class_id = ?",
+        (unit_id, class_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="단원을 찾을 수 없습니다.")
+    return row
+
+
+@router.get("/classes/{class_id}/units")
+def list_units(db: sqlite3.Connection = Depends(get_db), cls: sqlite3.Row = Depends(owned_class)):
+    """단원 목록과 단원별 진도. 대시보드가 쓰는 것과 같은 계산이다."""
+    return {"current_unit_id": cls["current_unit_id"], "units": unit_progress(db, cls["id"])}
+
+
+@router.post("/classes/{class_id}/units", status_code=201)
+def create_unit(
+    body: UnitCreate,
+    db: sqlite3.Connection = Depends(get_db),
+    cls: sqlite3.Row = Depends(owned_class),
+):
+    """단원을 하나 더한다. 새 단원은 맨 뒤에 붙고, 첫 단원이면 바로 '지금 단원' 이 된다."""
+    try:
+        with db:
+            position = db.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM units WHERE class_id = ?", (cls["id"],)
+            ).fetchone()[0]
+            unit_id = db.execute(
+                "INSERT INTO units (class_id, title, position, target_fixed) VALUES (?, ?, ?, ?)",
+                (cls["id"], body.title, position, body.target_fixed),
+            ).lastrowid
+            first = cls["current_unit_id"] is None
+            if first:
+                db.execute(
+                    "UPDATE classes SET current_unit_id = ? WHERE id = ?", (unit_id, cls["id"])
+                )
+                db.execute("UPDATE units SET status = 'active' WHERE id = ?", (unit_id,))
+    except sqlite3.IntegrityError:  # UNIQUE (class_id, title)
+        raise HTTPException(status_code=409, detail="같은 이름의 단원이 이미 있어요.")
+    return {
+        "current_unit_id": unit_id if first else cls["current_unit_id"],
+        "units": unit_progress(db, cls["id"]),
+    }
+
+
+@router.patch("/classes/{class_id}/units/{unit_id}")
+def update_unit(
+    unit_id: int,
+    body: UnitEdit,
+    db: sqlite3.Connection = Depends(get_db),
+    cls: sqlite3.Row = Depends(owned_class),
+):
+    """단원의 이름·목표 개수·상태·순서를 고친다. 목표 개수를 바꾸면 진도 퍼센트가 함께 바뀐다."""
+    unit = _owned_unit(db, cls["id"], unit_id)
+    changes = {field: value for field, value in body.model_dump().items() if value is not None}
+    if not changes:
+        raise HTTPException(status_code=422, detail="고칠 내용을 보내 주세요.")
+    assigns = ", ".join(f"{field} = ?" for field in changes)
+    try:
+        with db:
+            db.execute(
+                f"UPDATE units SET {assigns} WHERE id = ?", (*changes.values(), unit["id"])
+            )
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="같은 이름의 단원이 이미 있어요.")
+    return {"current_unit_id": cls["current_unit_id"], "units": unit_progress(db, cls["id"])}
+
+
+@router.delete("/classes/{class_id}/units/{unit_id}")
+def remove_unit(
+    unit_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    cls: sqlite3.Row = Depends(owned_class),
+):
+    """잘못 만든 단원을 지운다. 이미 그 단원으로 제출된 코드가 있으면 진도 기록이 사라지므로 지우지 않는다."""
+    unit = _owned_unit(db, cls["id"], unit_id)
+    used = db.execute("SELECT COUNT(*) FROM threads WHERE unit_id = ?", (unit["id"],)).fetchone()[0]
+    if used:
+        raise HTTPException(status_code=409, detail="이미 학생들이 제출한 단원은 지울 수 없어요.")
+    with db:
+        # 지우려는 단원이 '지금 단원' 이면 먼저 손을 뗀다 (FK 로 묶여 있어 순서가 중요하다).
+        if cls["current_unit_id"] == unit["id"]:
+            db.execute("UPDATE classes SET current_unit_id = NULL WHERE id = ?", (cls["id"],))
+        db.execute("DELETE FROM units WHERE id = ?", (unit["id"],))
+    current = None if cls["current_unit_id"] == unit["id"] else cls["current_unit_id"]
+    return {"current_unit_id": current, "units": unit_progress(db, cls["id"])}
+
+
+@router.put("/classes/{class_id}/current-unit")
+def set_current_unit(
+    body: CurrentUnit,
+    db: sqlite3.Connection = Depends(get_db),
+    cls: sqlite3.Row = Depends(owned_class),
+):
+    """지금 수업하는 단원을 정한다. 이 뒤에 학생이 새로 시작하는 코드가 이 단원의 진도로 쌓인다.
+
+    이미 시작한 코드의 단원은 바뀌지 않는다 (지난 단원의 진도를 되돌리지 않기 위해서다).
+    """
+    with db:
+        if body.unit_id is None:
+            db.execute("UPDATE classes SET current_unit_id = NULL WHERE id = ?", (cls["id"],))
+        else:
+            unit = _owned_unit(db, cls["id"], body.unit_id)
+            db.execute(
+                "UPDATE classes SET current_unit_id = ? WHERE id = ?", (unit["id"], cls["id"])
+            )
+            # 지금 수업하는 단원은 진행 중으로, 지나간 단원은 마친 것으로 표시해 둔다.
+            db.execute(
+                "UPDATE units SET status = 'done' WHERE class_id = ? AND position < ? AND status = 'active'",
+                (cls["id"], unit["position"]),
+            )
+            db.execute("UPDATE units SET status = 'active' WHERE id = ?", (unit["id"],))
+    return {"current_unit_id": body.unit_id, "units": unit_progress(db, cls["id"])}
 
 
 @router.get("/classes/{class_id}/dashboard")

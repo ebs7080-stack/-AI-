@@ -81,3 +81,34 @@ def test_teacher_key_and_nickname_db_is_moved_to_accounts_and_student_numbers(tm
         r = c.post("/api/join", json={"join_code": "ABC234", "student_no": "철수"})
         assert r.status_code == 200
         assert len(c.get("/api/submissions").json()) == 1
+
+
+def test_db_from_before_units_gains_the_unit_columns_and_triggers(tmp_path, monkeypatch):
+    """단원 기능이 없던 DB 를 그대로 올릴 수 있다. 기존 교실·학생·기록은 건드리지 않는다."""
+    path = tmp_path / "preunits.db"
+    monkeypatch.setenv("CWA_DB_PATH", str(path))
+    conn = sqlite3.connect(path)
+    conn.executescript(LEGACY_SCHEMA)
+    conn.execute("INSERT INTO classes (name, join_code, teacher_key_hash) VALUES ('반', 'ABC234', 'x')")
+    conn.execute("INSERT INTO students (class_id, nickname) VALUES (1, '철수')")
+    conn.execute("INSERT INTO submissions (student_id, code) VALUES (1, 'a = 1')")
+    conn.commit()
+    conn.close()
+
+    init_db()
+    init_db()  # 두 번 실행해도 된다
+
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    classes = {r["name"] for r in conn.execute("PRAGMA table_info(classes)")}
+    threads = {r["name"] for r in conn.execute("PRAGMA table_info(threads)")}
+    assert "current_unit_id" in classes and "unit_id" in threads
+    # 올리기 전의 스레드는 어느 단원에도 속하지 않는다 (없던 단원을 만들어 넣지 않는다).
+    assert conn.execute("SELECT COUNT(*) FROM threads WHERE unit_id IS NOT NULL").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM units").fetchone()[0] == 0
+
+    triggers = {
+        r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+    }
+    assert {"trg_classes_current_unit_ins", "trg_classes_current_unit_upd"} <= triggers
+    conn.close()

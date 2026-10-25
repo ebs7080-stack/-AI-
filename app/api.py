@@ -115,8 +115,13 @@ def create_submission(
                 "SELECT id FROM threads WHERE student_id = ? AND status = 'open'", (student["id"],)
             ).fetchall():
                 ended += [(sid, "dropped") for sid in close_thread(db, old["id"], "dropped")]
+            # 시작하는 코드는 교실의 지금 단원에 담는다 (단원을 안 정해 둔 교실이면 비어 있다).
             thread_id = db.execute(
-                "INSERT INTO threads (student_id) VALUES (?)", (student["id"],)
+                """
+                INSERT INTO threads (student_id, unit_id)
+                VALUES (?, (SELECT c.current_unit_id FROM classes c WHERE c.id = ?))
+                """,
+                (student["id"], student["class_id"]),
             ).lastrowid
             watching = None
         else:

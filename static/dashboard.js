@@ -299,6 +299,137 @@ function renderErrors() {
   $("errors-body").replaceChildren(content);
 }
 
+/* ---------- 단원 진도 ---------- */
+
+const UNIT_STATUS_LABELS = { planned: "예정", active: "수업 중", done: "마침" };
+
+// 되돌리기 어려운 동작은 같은 버튼을 4초 안에 한 번 더 눌러야 실행된다 (학생 화면과 같은 방식).
+function armTwice(button, armedLabel, action) {
+  const original = button.textContent;
+  let timer = null;
+  button.addEventListener("click", async () => {
+    if (timer === null) {
+      button.textContent = armedLabel;
+      timer = setTimeout(() => {
+        button.textContent = original;
+        timer = null;
+      }, 4000);
+      return;
+    }
+    clearTimeout(timer);
+    timer = null;
+    button.textContent = original;
+    await action();
+  });
+}
+
+function unitRow(unit) {
+  const pct = unit.done_pct ?? 0;
+  const head = el(
+    "div",
+    { class: "unit-head" },
+    el("b", { class: "unit-title", text: unit.title }),
+    el("span", { class: `state ${unit.is_current ? "helping" : "idle"}`, text: UNIT_STATUS_LABELS[unit.status] })
+  );
+  if (unit.is_current) head.append(el("span", { class: "unit-now", text: "지금 단원" }));
+
+  // 막대는 '목표를 채운 학생 비율' 이다. 학생별 진도의 평균은 아래 설명줄에 따로 적는다.
+  const bar = el(
+    "div",
+    { class: "unit-bar" },
+    el("span", { class: "muted small", text: "목표 달성" }),
+    el(
+      "div",
+      { class: "track", role: "img", "aria-label": `${unit.title}: 목표를 채운 학생 ${pct}%` },
+      el("div", { class: "fill", style: `--ratio:${pct / 100}` }),
+      el("span", { class: "val", text: unit.done_pct == null ? "–" : `${pct}%` })
+    )
+  );
+
+  const counts =
+    unit.students_total === 0
+      ? "등록한 학생이 없어요."
+      : `${unit.students_done}/${unit.students_total}명이 목표를 채웠어요 · 평균 진도 ${unit.avg_progress_pct}%`;
+  const detail = el(
+    "p",
+    { class: "muted small unit-detail", text: `목표 ${unit.target_fixed}개 · ${counts} · 제출된 코드 ${unit.threads}개 (다 고침 ${unit.fixed_threads}개)` }
+  );
+
+  const actions = el("div", { class: "unit-actions" });
+  if (!unit.is_current) {
+    const pick = el("button", { class: "btn btn-secondary btn-sm", type: "button", text: "지금 단원으로" });
+    pick.addEventListener("click", () => sendUnit("/current-unit", "PUT", { unit_id: unit.id }));
+    actions.append(pick);
+  }
+
+  // 목표 개수는 그 자리에서 고친다 (진도의 분모라서 자주 만지게 된다).
+  const targetId = `unit-target-${unit.id}`;
+  const target = el("input", {
+    id: targetId,
+    class: "help-time-minutes unit-target",
+    type: "number",
+    min: "1",
+    max: "50",
+    value: String(unit.target_fixed),
+    inputmode: "numeric",
+    "aria-label": `${unit.title} 목표 개수`,
+  });
+  const save = el("button", { class: "btn btn-secondary btn-sm", type: "button", text: "목표 저장" });
+  save.addEventListener("click", () => {
+    const value = Number(target.value);
+    if (!Number.isInteger(value) || value < 1 || value > 50) {
+      $("unit-error").textContent = "목표 개수는 1부터 50까지의 정수로 적어 주세요.";
+      return;
+    }
+    if (value !== unit.target_fixed) sendUnit(`/units/${unit.id}`, "PATCH", { target_fixed: value });
+  });
+  actions.append(el("span", { class: "unit-target-wrap" }, el("span", { class: "muted small", text: "목표" }), target, el("span", { class: "muted small", text: "개" })), save);
+
+  // 제출이 하나도 없는 단원만 지울 수 있다 (서버도 같은 규칙으로 막는다).
+  if (unit.threads === 0) {
+    const remove = el("button", { class: "btn btn-secondary btn-sm unit-remove", type: "button", text: "삭제" });
+    armTwice(remove, "한 번 더 누르면 지워요", () => sendUnit(`/units/${unit.id}`, "DELETE"));
+    actions.append(remove);
+  }
+
+  return el("li", { class: "unit-item" }, head, bar, detail, actions);
+}
+
+function renderUnits() {
+  const units = data.units;
+  if (units.length === 0) {
+    $("units-body").replaceChildren(
+      emptyState("📚", "아직 만든 단원이 없어요. 위에서 단원을 추가하면 그때부터 진도가 쌓여요.")
+    );
+    return;
+  }
+  $("units-body").replaceChildren(el("ul", { class: "unit-list" }, ...units.map(unitRow)));
+}
+
+// 단원을 고친 뒤에는 대시보드를 다시 불러 학생별 진도까지 함께 맞춘다.
+async function sendUnit(path, method, body) {
+  $("unit-error").textContent = "";
+  try {
+    const res = await fetch(`/api/teacher/classes/${classId}${path}`, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) return void (location.href = "/teacher.html");
+    if (!res.ok) {
+      // 422 의 detail 은 항목별 목록이라 그대로 보여 주면 읽기 어렵다. 문자열일 때만 쓴다.
+      const body = await res.json().catch(() => null);
+      const detail = typeof body?.detail === "string" ? body.detail : null;
+      throw new Error(detail ?? "단원을 저장하지 못했어요. 적은 내용을 다시 확인해 주세요.");
+    }
+    await load({ dim: true });
+    return true;
+  } catch (err) {
+    $("unit-error").textContent = err.message;
+    return false;
+  }
+}
+
 /* ---------- 학생별 현황 ---------- */
 
 const STATE_LABELS = { fixing: "🛠 고치는 중", helping: "🤝 도와주는 중", idle: "💤 대기 중" };
@@ -312,14 +443,35 @@ function stateCell(student) {
   return cell;
 }
 
+// 지금 단원의 진도. 단원을 정해 두지 않은 교실에서는 칸을 비운다.
+function progressCell(student) {
+  if (student.unit_progress_pct == null) return el("td", { class: "num muted", text: "–" });
+  const cell = el(
+    "td",
+    { class: "unit-cell" },
+    el(
+      "div",
+      { class: "track" },
+      el("div", { class: "fill", style: `--ratio:${student.unit_progress_pct / 100}` }),
+      el("span", { class: "val", text: `${student.unit_progress_pct}%` })
+    )
+  );
+  cell.append(el("span", { class: "state-detail", text: `${student.unit_fixed}/${student.unit_target}개` }));
+  return cell;
+}
+
 function renderStudents() {
   const students = data.students;
   const fixing = students.filter((s) => s.state === "fixing").length;
   const helping = students.filter((s) => s.state === "helping").length;
+  const current = data.units.find((u) => u.is_current);
+  const unitNote = current
+    ? ` 단원 진도는 지금 단원 "${current.title}" 기준이고 기간과 상관없어요.`
+    : " 지금 단원을 정하면 단원 진도도 함께 보여요.";
   $("students-sub").textContent =
     students.length === 0
       ? ""
-      : `지금 ${fixing}명이 고치는 중, ${helping}명이 도와주는 중이에요. 오른쪽 숫자는 선택한 기간 기준이에요.`;
+      : `지금 ${fixing}명이 고치는 중, ${helping}명이 도와주는 중이에요. 오른쪽 숫자는 선택한 기간 기준이에요.${unitNote}`;
 
   if (students.length === 0) {
     $("students-body").replaceChildren(
@@ -334,6 +486,7 @@ function renderStudents() {
       el("td", {}, el("code", { text: s.student_no })),
       el("td", { text: s.name === s.student_no ? "–" : s.name }),
       stateCell(s),
+      progressCell(s),
       el("td", { class: "num", text: String(s.submissions) }),
       el("td", { class: "num", text: String(s.fixed) }),
       el("td", { class: "num", text: String(s.dropped) }),
@@ -343,7 +496,11 @@ function renderStudents() {
     )
   );
   $("students-body").replaceChildren(
-    tableWrap(["학번", "이름", "지금 상태", "제출", "다 고침", "그만둠", "도와줌", "도움 받음", "마지막 제출"], rows, [3, 4, 5, 6, 7])
+    tableWrap(
+      ["학번", "이름", "지금 상태", "단원 진도", "제출", "다 고침", "그만둠", "도와줌", "도움 받음", "마지막 제출"],
+      rows,
+      [4, 5, 6, 7, 8]
+    )
   );
 }
 
@@ -361,6 +518,7 @@ function render() {
   renderKpis(data.summary);
   renderDaily();
   renderErrors();
+  renderUnits();
   renderStudents();
   $("dash-body").hidden = false;
 }
@@ -406,6 +564,15 @@ for (const button of document.querySelectorAll(".filters button")) {
     load({ dim: true });
   });
 }
+
+$("unit-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const ok = await sendUnit("/units", "POST", {
+    title: $("unit-title").value,
+    target_fixed: Number($("unit-target").value) || 1,
+  });
+  if (ok) $("unit-form").reset();
+});
 
 $("daily-toggle").addEventListener("click", () => {
   showDailyTable = !showDailyTable;

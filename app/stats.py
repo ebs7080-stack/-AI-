@@ -45,9 +45,81 @@ def class_dashboard(db: sqlite3.Connection, class_id: int, days: int | None) -> 
         "summary": _summary(db, params),
         "errors": _errors(db, params),
         "daily": _daily(db, params, start, today),
+        # 단원 진도는 학기 내내 쌓이는 값이라 기간 필터를 걸지 않는다 (걸면 진도가 되돌아간 것처럼 보인다).
+        "units": unit_progress(db, class_id),
         # 아래 학생 상태(고치는 중 등)는 기간과 상관없이 '지금' 기준이고, 숫자만 기간을 따른다.
         "students": _students(db, params, now),
     }
+
+
+def _progress_pct(fixed: int, target: int) -> float:
+    """목표보다 더 고쳤어도 100% 를 넘기지 않는다 (막대와 평균이 100 을 넘으면 읽기 어렵다)."""
+    return min(100.0, round(100.0 * fixed / target, 1))
+
+
+def unit_progress(db: sqlite3.Connection, class_id: int) -> list[dict]:
+    """교실의 단원 목록과 단원별 전체 진도.
+
+    한 단원의 진도는 '목표 개수를 다 고친 학생 수 / 등록 학생 수' 다. 학생 한 명의 진도는
+    그 단원에서 다 고친 코드 수를 목표(target_fixed)로 나눈 값이고, 학급 평균도 같이 돌려준다.
+    """
+    students_total = db.execute(
+        "SELECT COUNT(*) FROM students WHERE class_id = ?", (class_id,)
+    ).fetchone()[0]
+    rows = db.execute(
+        """
+        SELECT u.id, u.title, u.position, u.status, u.target_fixed, u.created_at,
+               c.current_unit_id IS NOT NULL AND c.current_unit_id = u.id AS is_current,
+               (SELECT COUNT(*) FROM threads t WHERE t.unit_id = u.id) AS threads,
+               (SELECT COUNT(*) FROM threads t WHERE t.unit_id = u.id AND t.status = 'fixed') AS fixed_threads
+        FROM units u JOIN classes c ON c.id = u.class_id
+        WHERE u.class_id = ?
+        ORDER BY u.position, u.id
+        """,
+        (class_id,),
+    ).fetchall()
+
+    # 학생 한 명이 한 단원에서 다 고친 코드 수. 한 번도 안 한 학생은 행이 없어 0 으로 본다.
+    fixed_by = {
+        (r["unit_id"], r["student_id"]): r["n"]
+        for r in db.execute(
+            """
+            SELECT t.unit_id, t.student_id, COUNT(*) AS n
+            FROM threads t JOIN students st ON st.id = t.student_id
+            WHERE st.class_id = ? AND t.status = 'fixed' AND t.unit_id IS NOT NULL
+            GROUP BY t.unit_id, t.student_id
+            """,
+            (class_id,),
+        )
+    }
+    student_ids = [r[0] for r in db.execute("SELECT id FROM students WHERE class_id = ?", (class_id,))]
+
+    result = []
+    for row in rows:
+        per_student = [fixed_by.get((row["id"], sid), 0) for sid in student_ids]
+        done = sum(1 for count in per_student if count >= row["target_fixed"])
+        result.append(
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "position": row["position"],
+                "status": row["status"],
+                "target_fixed": row["target_fixed"],
+                "is_current": bool(row["is_current"]),
+                "threads": row["threads"],
+                "fixed_threads": row["fixed_threads"],
+                "students_total": students_total,
+                "students_done": done,
+                # 두 가지 눈금: 목표를 채운 학생 비율과, 학생별 진도의 평균.
+                "done_pct": _progress_pct(done, students_total) if students_total else None,
+                "avg_progress_pct": (
+                    round(sum(_progress_pct(c, row["target_fixed"]) for c in per_student) / len(per_student), 1)
+                    if per_student
+                    else None
+                ),
+            }
+        )
+    return result
 
 
 def _summary(db: sqlite3.Connection, p: dict) -> dict:
@@ -176,6 +248,30 @@ def _daily(db: sqlite3.Connection, p: dict, start: date | None, today: date) -> 
 
 
 def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
+    # 지금 단원의 목표와, 학생마다 그 단원에서 다 고친 코드 수. 단원을 안 정해 둔 교실이면 비어 있다.
+    unit = db.execute(
+        """
+        SELECT u.id, u.title, u.target_fixed
+        FROM classes c JOIN units u ON u.id = c.current_unit_id
+        WHERE c.id = :class_id
+        """,
+        p,
+    ).fetchone()
+    unit_fixed = (
+        {
+            r["student_id"]: r["n"]
+            for r in db.execute(
+                """
+                SELECT t.student_id, COUNT(*) AS n FROM threads t
+                WHERE t.unit_id = ? AND t.status = 'fixed' GROUP BY t.student_id
+                """,
+                (unit["id"],),
+            )
+        }
+        if unit
+        else {}
+    )
+
     rows = db.execute(
         """
         SELECT st.id, st.student_no, st.name,
@@ -232,11 +328,16 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
         else:
             state = "idle"
         last = row["last_submission_at"]
+        unit_count = unit_fixed.get(row["id"], 0)
         result.append(
             {
                 "student_no": row["student_no"],
                 "name": row["name"],
                 "state": state,
+                # 지금 단원의 진도. 단원을 안 정해 둔 교실에서는 셋 다 None 이라 화면이 칸을 비운다.
+                "unit_fixed": unit_count if unit else None,
+                "unit_target": unit["target_fixed"] if unit else None,
+                "unit_progress_pct": _progress_pct(unit_count, unit["target_fixed"]) if unit else None,
                 "current_attempts": current["attempts"] if current else None,
                 "current_minutes": (
                     round((now - _parse(current["created_at"])).total_seconds() / 60) if current else None

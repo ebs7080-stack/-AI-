@@ -264,6 +264,7 @@ def test_empty_class(teacher, classroom):
         "name": "2학년 1반",
         "join_code": classroom["join_code"],
         "hide_names": False,
+        "current_unit_id": None,  # 단원을 만들기 전에는 지금 단원이 없다.
     }
     assert data["summary"]["students_total"] == 0
     assert data["summary"]["submissions"] == 0

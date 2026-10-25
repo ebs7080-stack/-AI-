@@ -26,8 +26,25 @@ CREATE TABLE IF NOT EXISTS classes (
     -- 도움 시간이 끝나는 시각(UTC). 비었거나 지났으면 친구 돕기와 채팅이 닫혀 있다.
     help_until TEXT,
     -- 1 이면 도움 짝이 된 학생들에게 서로의 이름을 가린다 (교사가 교실마다 고른다).
-    hide_names INTEGER NOT NULL DEFAULT 0
+    hide_names INTEGER NOT NULL DEFAULT 0,
+    -- 지금 수업하는 단원. 새로 시작한 코드는 이 단원의 진도로 센다 (비어 있으면 어느 단원에도 안 센다).
+    -- 반드시 같은 교실의 units 행이어야 한다 (trg_classes_current_unit_* 가 막는다).
+    current_unit_id INTEGER REFERENCES units(id)
 );
+
+-- 교사가 교실마다 만드는 수업 단원 (예: 변수, 반복문). 진도의 단위다.
+-- target_fixed 는 그 단원에서 학생 한 명이 다 고쳐야 하는 코드 개수, 즉 진도 100% 의 기준이다.
+CREATE TABLE IF NOT EXISTS units (
+    id INTEGER PRIMARY KEY,
+    class_id INTEGER NOT NULL REFERENCES classes(id),
+    title TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'active', 'done')),
+    target_fixed INTEGER NOT NULL DEFAULT 1 CHECK (target_fixed >= 1),
+    UNIQUE (class_id, title)
+);
+CREATE INDEX IF NOT EXISTS idx_units_class ON units(class_id, position);
 
 -- 교사가 교실에 미리 등록한 학생 명단. 학생은 교실 코드 + 학번으로 로그인한다.
 -- name 은 화면에 보이는 이름이고, 교사가 이름을 적지 않으면 학번이 들어간다.
@@ -70,8 +87,11 @@ CREATE TABLE IF NOT EXISTS threads (
     student_id INTEGER NOT NULL REFERENCES students(id),
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'fixed', 'dropped')),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    closed_at TEXT
+    closed_at TEXT,
+    -- 시작할 때의 교실 현재 단원. 나중에 교사가 단원을 넘겨도 이미 시작한 코드의 소속은 그대로 남는다.
+    unit_id INTEGER REFERENCES units(id)
 );
+CREATE INDEX IF NOT EXISTS idx_threads_unit ON threads(unit_id, status);
 
 CREATE TABLE IF NOT EXISTS submissions (
     id INTEGER PRIMARY KEY,
@@ -184,6 +204,36 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("UPDATE submissions SET thread_id = ? WHERE id = ?", (cur.lastrowid, row["id"]))
 
 
+def _migrate_units(conn: sqlite3.Connection) -> None:
+    """단원·진도 기능을 쓰기 전에 만든 DB 에 units 연결 열과 무결성 트리거를 붙인다.
+
+    units 테이블 자체는 SCHEMA 가 만든다. 여기서는 그보다 먼저 만들어진 classes/threads 에
+    열을 더하고, SQLite 가 제약으로는 적을 수 없는 규칙(현재 단원은 그 교실의 단원이어야 한다)을
+    트리거로 세운다. 트리거는 열이 생긴 뒤에 만들어야 하므로 SCHEMA 가 아니라 이 자리에 있다.
+    """
+    if "current_unit_id" not in _columns(conn, "classes"):
+        conn.execute("ALTER TABLE classes ADD COLUMN current_unit_id INTEGER REFERENCES units(id)")
+    if "unit_id" not in _columns(conn, "threads"):
+        conn.execute("ALTER TABLE threads ADD COLUMN unit_id INTEGER REFERENCES units(id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_threads_unit ON threads(unit_id, status)")
+
+    # 다른 교실의 단원을 현재 단원으로 가리키면 진도가 엉킨다. 어느 경로로 들어온 UPDATE 든 DB 가 막는다.
+    for name, event in (("ins", "INSERT"), ("upd", "UPDATE OF current_unit_id")):
+        conn.execute(
+            f"""
+            CREATE TRIGGER IF NOT EXISTS trg_classes_current_unit_{name}
+            BEFORE {event} ON classes
+            WHEN NEW.current_unit_id IS NOT NULL
+             AND NOT EXISTS (
+                 SELECT 1 FROM units u WHERE u.id = NEW.current_unit_id AND u.class_id = NEW.id
+             )
+            BEGIN
+                SELECT RAISE(ABORT, 'current_unit_id must belong to the class');
+            END
+            """
+        )
+
+
 def init_db() -> None:
     conn = get_connection()
     try:
@@ -191,6 +241,7 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         _migrate_accounts(conn)
         _migrate(conn)
+        _migrate_units(conn)
         conn.commit()
     finally:
         conn.close()
