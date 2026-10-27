@@ -411,3 +411,110 @@ def test_dashboard_never_exposes_code_or_hints(teacher, classroom, make_student)
     assert "secret_variable" not in text
     assert "12345" not in text
     assert "떠올려 보세요" not in text and "문장의 맨 끝" not in text  # 힌트 본문
+
+
+# ---------- 학생별 오답률과 수업 전에 볼 것 ----------
+
+NAME_ERROR_CODE = "print(score)\n"  # var.undefined_name
+ASSIGN_IN_IF_CODE = "if x = 1:\n    pass\n"  # cond.assign_in_if
+
+
+def add_first_unit(client, cls, title):
+    """교실의 첫 단원은 만들면 바로 지금 단원이 된다."""
+    r = client.post(f"/api/teacher/classes/{cls['id']}/units", json={"title": title, "target_fixed": 1})
+    assert r.status_code == 201, r.text
+    assert r.json()["current_unit_id"] is not None
+
+
+def test_student_error_rate_and_top_error(teacher, classroom, make_student):
+    minsu = make_student("민수")
+    yeonghui = make_student("영희")
+    enrolled = make_student("철수")  # 제출이 없는 학생
+
+    # 민수: 오류 있는 제출 2번(같은 코드 흐름 안에서 들여쓰기 → 이름 오류), 오류 없는 제출 1번.
+    first = submit(minsu)
+    submit(minsu, NAME_ERROR_CODE, thread_id=first["thread_id"])
+    submit(minsu, OTHER_CODE, thread_id=first["thread_id"])
+    # 민수의 새 코드 두 개도 이름 오류라서, 가장 많은 코드에서 만난 오류는 이름 오류다.
+    submit(minsu, NAME_ERROR_CODE + "\n")
+    submit(minsu, "print(scor)\n")
+    # 영희: 오류 없는 제출 하나.
+    submit(yeonghui, OTHER_CODE)
+    del enrolled
+
+    by_no = {s["student_no"]: s for s in dashboard(teacher, classroom)["students"]}
+    m = by_no["민수"]
+    assert m["submissions"] == 5 and m["error_submissions"] == 4
+    assert m["error_rate_pct"] == 80.0
+    assert m["top_error"]["case_id"] == "var.undefined_name"
+    assert m["top_error"]["label"]  # 교사용 이름이 붙는다.
+
+    y = by_no["영희"]
+    assert y["error_submissions"] == 0 and y["error_rate_pct"] == 0.0 and y["top_error"] is None
+
+    c = by_no["철수"]
+    assert c["submissions"] == 0 and c["error_rate_pct"] is None and c["top_error"] is None
+
+
+def test_error_rate_follows_the_period(teacher, classroom, make_student):
+    minsu = make_student("민수")
+    submit(minsu)  # 오류 있음
+    backdate("민수", 40)
+    submit(minsu, OTHER_CODE)  # 오류 없음 (새 코드)
+
+    week = {s["student_no"]: s for s in dashboard(teacher, classroom, days=7)["students"]}["민수"]
+    assert week["submissions"] == 1 and week["error_rate_pct"] == 0.0 and week["top_error"] is None
+    everything = {s["student_no"]: s for s in dashboard(teacher, classroom)["students"]}["민수"]
+    assert everything["error_rate_pct"] == 50.0
+
+
+def test_focus_without_unit_ranks_errors_in_the_period(teacher, classroom, make_student):
+    a, b, c = make_student("가"), make_student("나"), make_student("다")
+    for s in (a, b, c):
+        submit(s, NAME_ERROR_CODE)  # 셋 다 이름 오류, 지금도 고치는 중
+    t = submit(a, CODE)["thread_id"]  # 가는 새 코드에서 들여쓰기 오류를 만났다가
+    submit(a, OTHER_CODE, thread_id=t)  # 고쳤다 (지금 막힌 건 아니다)
+    submit(b, ASSIGN_IN_IF_CODE)  # 나는 조건문 오류에서 막혀 있다
+
+    focus = dashboard(teacher, classroom, days=7)["focus"]
+    assert focus["scope"] == "period" and focus["unit_title"] is None
+    items = {i["case_id"]: i for i in focus["items"]}
+    assert focus["items"][0]["case_id"] == "var.undefined_name"
+    assert items["var.undefined_name"]["students"] == 3
+    # 가·나는 새 코드를 시작해서 이름 오류 코드는 그만둔 상태다. 지금도 막힌 건 다 하나뿐이다.
+    assert items["var.undefined_name"]["stuck_now"] == 1
+    assert items["loop.body_not_indented"]["stuck_now"] == 0
+    assert items["cond.assign_in_if"]["stuck_now"] == 1
+    assert len(focus["items"]) <= 3
+
+
+def test_focus_is_limited_to_three(teacher, classroom, make_student):
+    s = make_student("민수")
+    for code in (CODE, NAME_ERROR_CODE, ASSIGN_IN_IF_CODE, "if x > 1\n    pass\n"):
+        submit(s, code)
+    assert len(dashboard(teacher, classroom)["focus"]["items"]) == 3
+
+
+def test_focus_uses_the_current_unit(teacher, classroom, make_student):
+    minsu = make_student("민수")
+    submit(minsu, NAME_ERROR_CODE)  # 단원을 정하기 전의 코드
+    add_first_unit(teacher, classroom, "조건문")
+    submit(minsu, ASSIGN_IN_IF_CODE)  # 지금 단원의 코드
+
+    focus = dashboard(teacher, classroom, days=7)["focus"]
+    assert focus["scope"] == "unit" and focus["unit_title"] == "조건문"
+    assert [i["case_id"] for i in focus["items"]] == ["cond.assign_in_if"]
+    assert focus["items"][0]["stuck_now"] == 1
+
+    # 단원 범위는 기간 필터를 따르지 않는다.
+    backdate("민수", 40)
+    assert [i["case_id"] for i in dashboard(teacher, classroom, days=7)["focus"]["items"]] == ["cond.assign_in_if"]
+
+
+def test_focus_and_error_columns_never_expose_code(teacher, classroom, make_student):
+    minsu = make_student("민수")
+    submit(minsu, "secret_variable = 12345\nif secret_variable > 1\n    print(secret_variable)\n")
+    data = dashboard(teacher, classroom)
+    assert data["focus"]["items"] and data["students"][0]["top_error"]
+    text = teacher.get(f"/api/teacher/classes/{classroom['id']}/dashboard").text
+    assert "secret_variable" not in text and "12345" not in text
