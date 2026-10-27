@@ -1039,6 +1039,37 @@ textarea {
 .unit-cell .val { font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .unit-cell .state-detail { margin-left: 0; }
 
+/* 수업 전에 볼 것: 많이 막힌 오류 순위 */
+.focus-list { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
+.focus-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-low);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.focus-rank {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--primary-wash);
+  color: var(--primary-ink);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.focus-main { display: grid; gap: 2px; min-width: 0; }
+.focus-label { overflow-wrap: anywhere; line-height: 1.35; }
+.focus-item .state { white-space: nowrap; }
+@media (max-width: 560px) {
+  .focus-item { grid-template-columns: auto minmax(0, 1fr); }
+  .focus-item .state { grid-column: 2; justify-self: start; }
+}
+
 /* ---------- 교사: 오류별 힌트 편집 ---------- */
 
 .hint-guide { margin-top: 0; }

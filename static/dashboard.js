@@ -137,6 +137,46 @@ function renderKpis(summary) {
   );
 }
 
+/* ---------- 수업 전에 볼 것 (많이 막힌 오류 몇 개) ---------- */
+
+function renderFocus() {
+  const focus = data.focus;
+  $("focus-sub").textContent =
+    focus.scope === "unit"
+      ? `지금 단원 "${focus.unit_title}"에서 학생들이 가장 많이 만난 오류예요. 단원 전체 기준이라 기간 선택과 상관없어요.`
+      : "선택한 기간에 학생들이 가장 많이 만난 오류예요. 지금 단원을 정하면 그 단원 기준으로 바뀌어요.";
+
+  if (focus.items.length === 0) {
+    $("focus-body").replaceChildren(
+      emptyState("✨", focus.scope === "unit" ? "이 단원에서는 아직 발견된 오류가 없어요." : "이 기간에는 발견된 오류가 없어요.")
+    );
+    return;
+  }
+  const total = data.summary.students_total;
+  const items = focus.items.map((item, i) => {
+    const stuck =
+      item.stuck_now > 0
+        ? el("span", { class: "state fixing", text: `지금 ${item.stuck_now}명 막힘` })
+        : el("span", { class: "state idle", text: "지금 막힌 학생 없음" });
+    return el(
+      "li",
+      { class: "focus-item" },
+      el("span", { class: "focus-rank", text: String(i + 1), "aria-hidden": "true" }),
+      el(
+        "div",
+        { class: "focus-main" },
+        el("b", { class: "focus-label", text: item.label }),
+        el("span", {
+          class: "muted small",
+          text: `${item.students}명${total ? ` / ${total}명` : ""}이 만났어요 · 코드 ${item.threads}개`,
+        })
+      ),
+      stuck
+    );
+  });
+  $("focus-body").replaceChildren(el("ol", { class: "focus-list" }, ...items));
+}
+
 /* ---------- 날짜별 제출 (세로 막대) ---------- */
 
 // 눈금이 1, 2, 5 × 10ⁿ 처럼 떨어지게 잡는다. 제출 횟수는 정수라 간격은 1 이상이다.
@@ -460,6 +500,22 @@ function progressCell(student) {
   return cell;
 }
 
+// 오답률: 분석기가 오류를 찾은 제출의 비율. 제출이 없으면 비운다.
+function errorRateCell(student) {
+  if (student.error_rate_pct == null) return el("td", { class: "num muted", text: "–" });
+  return el(
+    "td",
+    { class: "num" },
+    `${student.error_rate_pct}%`,
+    el("span", { class: "state-detail", text: `${student.error_submissions}/${student.submissions}` })
+  );
+}
+
+function topErrorCell(student) {
+  if (!student.top_error) return el("td", { class: "muted", text: "–" });
+  return el("td", { class: "wrap", text: student.top_error.label });
+}
+
 function renderStudents() {
   const students = data.students;
   const fixing = students.filter((s) => s.state === "fixing").length;
@@ -471,7 +527,7 @@ function renderStudents() {
   $("students-sub").textContent =
     students.length === 0
       ? ""
-      : `지금 ${fixing}명이 고치는 중, ${helping}명이 도와주는 중이에요. 오른쪽 숫자는 선택한 기간 기준이에요.${unitNote}`;
+      : `지금 ${fixing}명이 고치는 중, ${helping}명이 도와주는 중이에요. 오른쪽 숫자는 선택한 기간 기준이에요. 오답률은 오류가 발견된 제출의 비율이에요(분석기가 확실한 오류만 찾아서 실제보다 낮게 나올 수 있어요).${unitNote}`;
 
   if (students.length === 0) {
     $("students-body").replaceChildren(
@@ -488,6 +544,8 @@ function renderStudents() {
       stateCell(s),
       progressCell(s),
       el("td", { class: "num", text: String(s.submissions) }),
+      errorRateCell(s),
+      topErrorCell(s),
       el("td", { class: "num", text: String(s.fixed) }),
       el("td", { class: "num", text: String(s.dropped) }),
       el("td", { class: "num", text: String(s.helped) }),
@@ -497,9 +555,9 @@ function renderStudents() {
   );
   $("students-body").replaceChildren(
     tableWrap(
-      ["학번", "이름", "지금 상태", "단원 진도", "제출", "다 고침", "그만둠", "도와줌", "도움 받음", "마지막 제출"],
+      ["학번", "이름", "지금 상태", "단원 진도", "제출", "오답률", "자주 만난 오류", "다 고침", "그만둠", "도와줌", "도움 받음", "마지막 제출"],
       rows,
-      [4, 5, 6, 7, 8]
+      [4, 5, 7, 8, 9, 10]
     )
   );
 }
@@ -516,6 +574,7 @@ function render() {
   helpTime.update(data.help_time);
   helpTime.setHideNames(data.class.hide_names);
   renderKpis(data.summary);
+  renderFocus();
   renderDaily();
   renderErrors();
   renderUnits();

@@ -44,6 +44,8 @@ def class_dashboard(db: sqlite3.Connection, class_id: int, days: int | None) -> 
         "period": {"days": days, "start": start.isoformat() if start else None},
         "summary": _summary(db, params),
         "errors": _errors(db, params),
+        # 수업 전에 한눈에 볼 요약: 지금 단원(없으면 선택한 기간)에서 가장 많이 막힌 오류 몇 개.
+        "focus": _focus(db, params),
         "daily": _daily(db, params, start, today),
         # 단원 진도는 학기 내내 쌓이는 값이라 기간 필터를 걸지 않는다 (걸면 진도가 되돌아간 것처럼 보인다).
         "units": unit_progress(db, class_id),
@@ -213,6 +215,87 @@ def _errors(db: sqlite3.Connection, p: dict) -> list[dict]:
     ]
 
 
+FOCUS_LIMIT = 3
+
+
+def _focus(db: sqlite3.Connection, p: dict) -> dict:
+    """가장 많이 막힌 오류 FOCUS_LIMIT 개와, 그 오류에서 지금도 막혀 있는 학생 수.
+
+    지금 단원이 있으면 그 단원에서 시작한 코드만 본다 (단원 진도처럼 기간 필터를 걸지 않는다:
+    단원은 여러 날에 걸쳐 진행되니 '이 단원에서 학생들이 어디서 막히는가' 가 수업 준비에 맞는 물음이다).
+    지금 단원이 없으면 선택한 기간 전체를 본다.
+
+    '지금 막힘' 은 고치는 중(open)인 코드의 **마지막 제출**에 그 오류가 남아 있는 학생 수다.
+    한 번 만났다가 이미 고친 학생은 세지 않는다.
+    """
+    unit = db.execute(
+        """
+        SELECT u.id, u.title FROM classes c JOIN units u ON u.id = c.current_unit_id
+        WHERE c.id = :class_id
+        """,
+        p,
+    ).fetchone()
+    if unit:
+        scope = "unit"
+        where = "t.unit_id = :unit_id"
+        q = {**p, "unit_id": unit["id"]}
+    else:
+        scope = "period"
+        where = "s.created_at >= :cutoff"
+        q = p
+
+    rows = db.execute(
+        f"""
+        SELECT f.case_id,
+               COUNT(DISTINCT s.student_id) AS students,
+               COUNT(DISTINCT s.thread_id) AS threads
+        FROM findings f
+        JOIN submissions s ON s.id = f.submission_id
+        JOIN threads t ON t.id = s.thread_id
+        JOIN students st ON st.id = s.student_id
+        WHERE st.class_id = :class_id AND {where}
+        GROUP BY f.case_id
+        ORDER BY students DESC, threads DESC, f.case_id
+        LIMIT {FOCUS_LIMIT}
+        """,
+        q,
+    ).fetchall()
+
+    # 고치는 중인 코드마다 마지막 제출의 오류. 단원 범위면 그 단원의 코드만 센다.
+    stuck_where = "AND t.unit_id = :unit_id" if unit else ""
+    stuck = {
+        r["case_id"]: r["n"]
+        for r in db.execute(
+            f"""
+            SELECT f.case_id, COUNT(DISTINCT t.student_id) AS n
+            FROM threads t
+            JOIN students st ON st.id = t.student_id
+            JOIN submissions s ON s.id = (
+                SELECT MAX(s2.id) FROM submissions s2 WHERE s2.thread_id = t.id
+            )
+            JOIN findings f ON f.submission_id = s.id
+            WHERE st.class_id = :class_id AND t.status = 'open' {stuck_where}
+            GROUP BY f.case_id
+            """,
+            q,
+        )
+    }
+    return {
+        "scope": scope,
+        "unit_title": unit["title"] if unit else None,
+        "items": [
+            {
+                "case_id": row["case_id"],
+                "label": case_label(row["case_id"]),
+                "students": row["students"],
+                "threads": row["threads"],
+                "stuck_now": stuck.get(row["case_id"], 0),
+            }
+            for row in rows
+        ],
+    }
+
+
 def _daily(db: sqlite3.Connection, p: dict, start: date | None, today: date) -> list[dict]:
     """하루마다 제출 수와 참여 학생 수. 제출이 없던 날도 0으로 채워 추이가 끊기지 않게 한다."""
     rows = db.execute(
@@ -277,6 +360,9 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
         SELECT st.id, st.student_no, st.name,
             (SELECT COUNT(*) FROM submissions s
               WHERE s.student_id = st.id AND s.created_at >= :cutoff) AS submissions,
+            (SELECT COUNT(*) FROM submissions s
+              WHERE s.student_id = st.id AND s.created_at >= :cutoff
+                AND EXISTS (SELECT 1 FROM findings f WHERE f.submission_id = s.id)) AS error_submissions,
             (SELECT COUNT(*) FROM threads t
               WHERE t.student_id = st.id AND t.status = 'fixed' AND t.created_at >= :cutoff) AS fixed,
             (SELECT COUNT(*) FROM threads t
@@ -318,6 +404,23 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
         )
     }
 
+    # 학생마다 기간 안에 가장 많은 코드에서 만난 오류 하나. 같은 코드를 다시 제출해도 한 번으로 센다.
+    # 동점이면 case_id 순으로 하나를 고른다 (화면이 갱신될 때마다 바뀌지 않게).
+    top_error: dict[int, str] = {}
+    for r in db.execute(
+        """
+        SELECT s.student_id, f.case_id, COUNT(DISTINCT s.thread_id) AS n
+        FROM findings f
+        JOIN submissions s ON s.id = f.submission_id
+        JOIN students st ON st.id = s.student_id
+        WHERE st.class_id = :class_id AND s.created_at >= :cutoff
+        GROUP BY s.student_id, f.case_id
+        ORDER BY s.student_id, n DESC, f.case_id
+        """,
+        p,
+    ):
+        top_error.setdefault(r["student_id"], r["case_id"])
+
     result = []
     for row in rows:
         current = fixing.get(row["id"])
@@ -343,6 +446,17 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
                     round((now - _parse(current["created_at"])).total_seconds() / 60) if current else None
                 ),
                 "submissions": row["submissions"],
+                # 오답률: 분석기가 오류를 하나라도 찾은 제출의 비율. 분석기는 확실한 것만 잡으므로
+                # (미탐을 택한다) 실제 틀린 비율보다 낮게 나올 수 있다. 제출이 없으면 None.
+                "error_submissions": row["error_submissions"],
+                "error_rate_pct": (
+                    round(100.0 * row["error_submissions"] / row["submissions"], 1) if row["submissions"] else None
+                ),
+                "top_error": (
+                    {"case_id": top_error[row["id"]], "label": case_label(top_error[row["id"]])}
+                    if row["id"] in top_error
+                    else None
+                ),
                 "fixed": row["fixed"],
                 "dropped": row["dropped"],
                 "helped": row["helped"],
