@@ -70,6 +70,21 @@ BAD = [
     ("def f(x):\n    return x * 2\n    print('끝')\n\nprint(f(1))\n", "func.unreachable", 3),
     ("def f():\n    return 1\n\ndef f():\n    return 2\n\nprint(f())\n", "func.defined_twice", 4),
     ("def total(a):\n    return sum(a)\n\ntotal = 0\nprint(total([1]))\n", "func.name_overwritten", 4),
+    # ---------- 이름 (rules/names.py) ----------
+    ("print(result)\nresult = 3\n", "var.used_before_assign", 1),
+    ("i = 0\nwhile i < 3:\n    i += 1\nprint(total)\ntotal = i\n", "var.used_before_assign", 4),
+    ("def f():\n    print(y)\n    y = 1\n\nf()\n", "var.used_before_assign", 2),
+    ("print(answer)\n", "var.undefined_name", 1),
+    ("name = input()\nprint(안녕, name)\n", "var.undefined_name", 2),
+    ("total = 0\nfor i in range(3):\n    total += i\nprint(totla)\n", "var.name_typo", 4),
+    ("Score = 90\nprint(score)\n", "var.name_typo", 2),
+    ("score = int(input())\nif score >= 60:\n    result = '합격'\nprint(result)\n", "var.conditional_assign", 4),
+    ("say()\n\ndef say():\n    print('안녕')\n", "func.called_before_def", 1),
+    ("x = 3\nprint(square(x))\n", "func.undefined_function", 2),
+    ("pirnt('안녕')\n", "func.call_typo", 1),
+    ("def greet():\n    print('hi')\n\nGreet()\n", "func.call_typo", 4),
+    ("def calc():\n    result = 1 + 2\n\ncalc()\nprint(result)\n", "func.local_used_outside", 5),
+    ("n = 5\n\ndef square(x):\n    return n * n\n\nprint(square(3))\n", "func.ignores_param", 4),
 ]
 
 # 비슷하게 생겼지만 맞는 코드. 아무것도 잡히면 안 된다 (오탐 방지).
@@ -129,6 +144,24 @@ GOOD = [
     "def log(x):\n    print(x)\n\ndef run(x):\n    return log(x)\n\nrun(1)\n",
     "for ch in 'ab':\n    if ch == 'a':\n        for ch in 'cd':\n            pass\n",
     "args = ['a']\nfor a in args:\n    args = []\n    args.append(a)\n",
+    # 이름: 만들어졌을 수도 있는 이름, 함수가 불릴 때 있는 이름, 동적으로 만든 이름은 잡지 않는다
+    "def show():\n    print(total)\n\ntotal = 10\nshow()\n",  # 함수는 불릴 때 바깥 이름을 찾는다
+    "def f(n):\n    if n <= 0:\n        return 0\n    return n + f(n - 1)\n\nprint(f(3))\n",
+    "for i in range(3):\n    last = i\nprint(last)\n",  # 반복문 안에서만 만든 이름은 '있을 수도 있음'
+    "while True:\n    word = input()\n    if word == 'q':\n        break\nprint(word)\n",
+    "try:\n    n = int(input())\nexcept ValueError:\n    n = 0\nprint(n)\n",
+    "x = int(input())\nif x > 0:\n    sign = '양수'\nelse:\n    sign = '양수 아님'\nprint(sign)\n",
+    "x = int(input())\nif x > 0:\n    msg = '양수'\n    print(msg)\n",
+    "x = int(input())\nif x < 0:\n    print('음수는 안 돼요')\n    exit()\nresult = x * 2\nprint(result)\n",
+    "squares = [n * n for n in range(5)]\nprint(squares, [k for k in {'a': 1}])\n",
+    "import math\nfrom random import randint\nprint(math.pi, randint(1, 6))\n",
+    "def setup():\n    global total\n    total = 0\n\nsetup()\nprint(total)\n",
+    "def outer():\n    count = 0\n    def inner():\n        return count + 1\n    return inner()\n\nprint(outer())\n",
+    "class Point:\n    x = 0\n\np = Point()\nprint(p.x)\n",
+    "from math import *\nprint(sqrt(4), pi)\n",  # * 로 가져온 이름은 알 수 없어서 따지지 않는다
+    "with open('a.txt') as f:\n    text = f.read()\nprint(text)\n",
+    "def area(w, h):\n    return w * h\n\nW = 3\ndef show(unused):\n    print(W)\n\nshow(0)\nprint(area(2, 3))\n",
+    "if (n := len('abc')) > 2:\n    print(n)\n",
     "x = 0.1 + 0.2\nm = 0\nfor n in [3, 5]:\n    if n > m:\n        m = n\nprint(x == 0.3, m)\n",  # 과제에 따라 맞을 수 있는 것은 잡지 않는다
 ]
 
@@ -295,14 +328,33 @@ def test_teacher_wording_applies_to_logic_cases(teacher, student):
 KNOWN_MISSES = [
     # break 가 있으면 끝날 수 있다고 보고 넘어간다. 여기서는 i 가 0 에 머물러 break 에 닿지 못해 끝나지 않는다.
     "i = 0\nwhile i < 5:\n    if i == 3:\n        break\n    print(i)\n",
-    # 이번 범위 밖: 경계값, range 끝, 이름 오타, 만들기 전 사용, 최댓값 초기값 0
+    # 이번 범위 밖: 경계값, 최댓값 초기값 0
     "score = int(input())\nif score > 60:\n    print('합격')\n",
-    "total = 0\nfor i in range(5):\n    totla = total + i\nprint(total)\n",
-    "print(result)\nresult = 3\n",
     "m = 0\nfor n in [-3, -1]:\n    if n > m:\n        m = n\n",
+    # 오타로 새 변수를 만든 경우(totla = ...)는 문법·이름 모두 맞아서 멈추지 않는다. 결과만 틀린다.
+    "total = 0\nfor i in range(5):\n    totla = total + i\nprint(total)\n",
+    # 함수가 불리는 순서는 따지지 않는다: show() 가 total 을 만들기 전에 불려 멈추지만 놓친다.
+    "def show():\n    print(total)\n\nshow()\ntotal = 10\n",
+    # 반복문 안에서만 만든 이름을 반복문 뒤에서 쓰면 한 번도 안 돌 때 멈추지만, 일부러 그렇게 쓰기도 해서 놓친다.
+    "for x in []:\n    last = x\nprint(last)\n",
 ]
 
 
 @pytest.mark.parametrize("code", KNOWN_MISSES)
 def test_known_misses_are_documented(code):
     assert analysis.analyze(code) == []
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("total", "`total`을 `total`은 `total`이 `total`과 `total`로"),
+    ("count", "`count`를 `count`는 `count`가 `count`와 `count`로"),
+    ("sum", "`sum`을 `sum`은 `sum`이 `sum`과 `sum`으로"),
+    ("name", "`name`을 `name`은 `name`이 `name`과 `name`으로"),  # 소리 나지 않는 e
+    ("점수", "`점수`를 `점수`는 `점수`가 `점수`와 `점수`로"),
+    ("10", "`10`을 `10`은 `10`이 `10`과 `10`으로"),
+])
+def test_particles_follow_the_filled_name(value, expected):
+    """자리에 들어간 이름의 끝소리에 맞춰 조사를 고른다 (문구에는 어느 쪽으로 써도 된다)."""
+    template = "`{name}`을 `{name}`는 `{name}`이 `{name}`와 `{name}`으로"
+    assert catalog.fill(template, {"name": value}) == expected
+    assert catalog.fill("`{name}`이나 {name}", {"name": "count"}) == "`count`이나 count"  # 조사가 아니면 그대로

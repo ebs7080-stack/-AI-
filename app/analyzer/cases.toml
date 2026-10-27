@@ -611,3 +611,118 @@ steps = [
   { label = "의심 지점", text = "{line}번 줄에서 함수 이름인 `{name}`에 값을 넣었어요. 그 아래 {other_line}번 줄에서 `{name}`을 함수처럼 부르고 있어요." },
   { label = "힌트", text = "함수와 변수는 이름을 나눠 쓸 수 없어요. 같은 이름에 값을 넣으면 함수가 사라져요. 변수 이름을 함수 이름과 다르게 지어 보세요." },
 ]
+
+# ==================== 이름 오류 (method = "ast", 규칙은 rules/names.py) ====================
+# 실행하면 NameError 로 멈추는 곳이다 (static-analysis.md 2단계). 모두 priority 20 이고,
+# 매개변수를 쓰지 않는 함수(func.ignores_param)만 결과가 틀리는 쪽(40)이다.
+# 비슷한 이름({name2})은 마지막 단계에서만 알려 준다. 앞 단계에서는 학생이 직접 철자를 견줘 보게 한다.
+
+[[case]]
+id = "var.used_before_assign"
+category = "변수"
+label = "변수를 만들기 전에 사용하기"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}`을 쓰는 곳에서 멈출 거예요. 그 줄이 실행될 때 `{name}`은 아직 만들어지지 않았어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 `{name}`을 쓰고 있어요. `{name}`에 처음 값을 넣는 곳은 {other_line}번 줄이에요." },
+  { label = "힌트", text = "파이썬은 위에서 아래로 한 줄씩 실행해요. 변수는 값을 넣는 줄이 먼저 실행된 뒤에야 쓸 수 있어요. 두 줄의 순서를 어떻게 해야 할까요?" },
+]
+
+[[case]]
+id = "var.undefined_name"
+category = "변수"
+label = "만든 적 없는 변수를 사용하기"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}`을 쓰는 곳에서 멈출 거예요. 파이썬은 `{name}`이 무엇인지 몰라요." },
+  { label = "의심 지점", text = "{line}번 줄의 `{name}`을 보세요. 코드 어디에서 `{name}`에 값을 넣었나요?" },
+  { label = "힌트", text = "변수는 쓰기 전에 먼저 값을 넣어 만들어야 해요. `{name}`에 어떤 값이 들어 있어야 하는지 생각해 보고, 그 값을 넣는 줄이 필요한지, 아니면 글자로 쓰려던 것인지 확인해 보세요." },
+]
+
+[[case]]
+id = "var.name_typo"
+category = "변수"
+label = "변수 이름을 잘못 쓰기 (오타, 대소문자 구분 못함)"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}`을 쓰는 곳에서 멈출 거예요. 파이썬은 `{name}`이라는 이름을 몰라요." },
+  { label = "의심 지점", text = "{line}번 줄의 `{name}`을 한 글자씩 읽어 보세요. 위에서 만든 변수 이름과 똑같나요?" },
+  { label = "힌트", text = "파이썬은 철자가 하나만 달라도, 대문자와 소문자가 달라도 다른 이름으로 봐요. 변수를 만든 줄의 이름과 견줘 보세요." },
+  { label = "추가 힌트", text = "혹시 `{name2}`를 쓰려고 했나요?" },
+]
+
+[[case]]
+id = "var.conditional_assign"
+category = "변수"
+label = "조건이 참일 때만 변수를 생성하기"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "조건이 거짓이면 이 코드는 `{name}`을 쓰는 곳에서 멈출 거예요. 그때는 `{name}`이 만들어지지 않아요." },
+  { label = "의심 지점", text = "`{name}`은 {other_line}번 줄의 `if`가 참일 때만 만들어져요. {line}번 줄에서는 조건과 상관없이 `{name}`을 쓰고 있어요." },
+  { label = "힌트", text = "조건이 거짓일 때 `{name}`에는 무엇이 들어 있어야 할까요? 조건이 거짓인 경우도 따로 정해 두거나, `if` 전에 처음 값을 넣어 두는 방법을 생각해 보세요." },
+]
+
+[[case]]
+id = "func.called_before_def"
+category = "함수"
+label = "함수 정의를 호출하는 코드보다 아래에 쓰기"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}`을 부르는 곳에서 멈출 거예요. 그때는 아직 `{name}` 함수가 만들어지지 않았어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 `{name}`을 부르는데, `{name}`을 정의하는 `def`는 그보다 아래인 {other_line}번 줄에 있어요." },
+  { label = "힌트", text = "`def`도 위에서 아래로 실행될 때 비로소 함수를 만들어요. 함수를 부르는 줄과 정의하는 줄 중 어느 쪽이 먼저 실행되어야 할까요?" },
+]
+
+[[case]]
+id = "func.undefined_function"
+category = "함수"
+label = "정의되지 않은 함수 호출하기"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}(...)`을 부르는 곳에서 멈출 거예요. `{name}`이라는 함수가 어디에도 없어요." },
+  { label = "의심 지점", text = "{line}번 줄에서 `{name}`을 부르고 있어요. 이 함수를 `def`로 만든 곳이 있나요?" },
+  { label = "힌트", text = "내가 만든 함수는 `def`로 먼저 정의해야 부를 수 있어요. 파이썬이 원래 가진 함수를 쓰려던 것이라면 이름이 정확한지 교과서에서 확인해 보세요." },
+]
+
+[[case]]
+id = "func.call_typo"
+category = "함수"
+label = "함수 이름을 잘못 쓰기 (오타, 대소문자 구분 못함)"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}(...)`을 부르는 곳에서 멈출 거예요. 파이썬은 `{name}`이라는 함수를 몰라요." },
+  { label = "의심 지점", text = "{line}번 줄의 `{name}`을 한 글자씩 읽어 보세요. 부르려던 함수의 이름과 똑같나요?" },
+  { label = "힌트", text = "함수 이름도 철자가 하나만 달라도, 대문자와 소문자가 달라도 다른 이름이에요. 함수를 정의한 줄이나 교과서의 이름과 견줘 보세요." },
+  { label = "추가 힌트", text = "혹시 `{name2}`를 부르려고 했나요?" },
+]
+
+[[case]]
+id = "func.local_used_outside"
+category = "함수"
+label = "함수 내부 변수를 함수 밖에서도 사용할 수 있다고 생각하기"
+method = "ast"
+priority = 20
+steps = [
+  { label = "관찰", text = "이 코드를 실행하면 `{name}`을 쓰는 곳에서 멈출 거예요. `{name}`은 함수 안에서만 있는 변수예요." },
+  { label = "의심 지점", text = "`{name}`은 {other_line}번 줄의 `{name2}` 함수 안에서 만들었어요. {line}번 줄은 그 함수 밖이에요." },
+  { label = "힌트", text = "함수 안에서 만든 변수는 함수가 끝나면 사라지고, 밖에서는 보이지 않아요. 함수가 계산한 값을 밖에서 쓰려면, 함수가 그 값을 어떻게 건네줘야 할까요?" },
+]
+
+[[case]]
+id = "func.ignores_param"
+category = "함수"
+label = "매개변수를 쓰지 않고 함수 밖의 변수를 그대로 쓰기"
+method = "ast"
+priority = 40
+steps = [
+  { label = "관찰", text = "함수에 어떤 값을 넘겨도 결과가 언제나 같을 거예요. 넘겨준 값을 함수가 쓰지 않아요." },
+  { label = "의심 지점", text = "{other_line}번 줄의 함수는 `{name}`을 받지만 한 번도 쓰지 않고, {line}번 줄에서 함수 밖의 `{name2}`를 쓰고 있어요." },
+  { label = "힌트", text = "함수는 부를 때 넘겨준 값으로 일해야 여러 값에 다시 쓸 수 있어요. 함수 안에서 어떤 이름을 써야 넘겨준 값을 쓰게 될까요?" },
+]

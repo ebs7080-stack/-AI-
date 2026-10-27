@@ -203,10 +203,10 @@ def test_submission_gets_syntax_feedback_one_step_at_a_time(student):
 
 
 def test_fixing_the_syntax_error_clears_the_feedback(student):
-    first = student.post("/api/submissions", json={"code": "if x > 1\n    print(x)\n"}).json()
+    first = student.post("/api/submissions", json={"code": "x = 3\nif x > 1\n    print(x)\n"}).json()
     assert len(first["findings"]) == 1
     fixed = student.post(
-        "/api/submissions", json={"code": "if x > 1:\n    print(x)\n", "thread_id": first["thread_id"]}
+        "/api/submissions", json={"code": "x = 3\nif x > 1:\n    print(x)\n", "thread_id": first["thread_id"]}
     ).json()
     assert first["syntax_error"] is True and fixed["syntax_error"] is False
     thread = student.get(f"/api/threads/{first['thread_id']}").json()
