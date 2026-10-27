@@ -210,4 +210,4 @@ def code_of(node: ast.AST) -> str:
 
 
 # 분류별 규칙을 불러와 등록한다 (모듈을 읽는 것만으로 @rule 이 RULES 에 더해진다).
-from . import cond, func, loop, nested, var  # noqa: E402,F401
+from . import cond, func, loop, names, nested, var  # noqa: E402,F401

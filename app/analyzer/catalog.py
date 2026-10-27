@@ -57,9 +57,56 @@ def fill(text: str, values: dict[str, object]) -> str:
         if name not in PLACEHOLDERS:
             return found.group(0)
         value = values.get(name)
-        return "" if value is None else str(value)
+        if value is None:
+            return ""
+        value = str(value)
+        particle = found.group("particle")
+        if particle is None:
+            return value + found.group("quote")
+        return value + found.group("quote") + _particle_for(value, particle)
 
-    return _PLACEHOLDER.sub(replace, text)
+    return _PLACEHOLDER_WITH_PARTICLE.sub(replace, text)
+
+
+# 자리 바로 뒤(닫는 ` 다음)의 조사. 채운 값의 끝소리에 맞춰 바꾼다 ('total'을, 'count'를).
+# 뒤에 한글이 이어지면(이나, 이고 ...) 조사가 아닐 수 있어 건드리지 않는다.
+_PAIRS = {"이라는": "라는", "이에요": "예요", "으로": "로", "을": "를", "은": "는", "이": "가", "과": "와"}
+_ALL_PARTICLES = sorted({*_PAIRS, *_PAIRS.values()}, key=len, reverse=True)
+_PLACEHOLDER_WITH_PARTICLE = re.compile(
+    r"\{(\w+)\}(?P<quote>`?)(?:(?P<particle>" + "|".join(_ALL_PARTICLES) + r")(?![가-힣]))?"
+)
+
+
+def _final_sound(word: str) -> str | None:
+    """마지막 글자를 우리말로 읽을 때의 받침: 'ㄹ', 'other'(그 밖의 받침), None(받침 없음).
+
+    영어 이름은 끝 글자로 어림한다 (total 토탈 → ㄹ, sum 섬 → 받침, count 카운트 → 없음)."""
+    word = word.rstrip("`'\")]} ")
+    if not word:
+        return None
+    ch = word[-1]
+    if "가" <= ch <= "힣":
+        jong = (ord(ch) - ord("가")) % 28
+        return None if jong == 0 else ("ㄹ" if jong == 8 else "other")
+    if ch.isdigit():  # 영 일 이 삼 사 오 육 칠 팔 구
+        return {"0": "other", "1": "ㄹ", "3": "other", "6": "other", "7": "ㄹ", "8": "ㄹ"}.get(ch)
+    low = word.lower()
+    if low.endswith("e") and len(low) > 2 and low[-2] in "lmn":  # 소리 나지 않는 e: file 파일, name 네임, line 라인
+        low = low[:-1]
+    if low.endswith("l"):
+        return "ㄹ"
+    if low.endswith(("m", "n", "ng", "k", "p", "b")) or (low.endswith("g") and len(low) > 1 and low[-2] in "aeiou"):
+        return "other"
+    return None
+
+
+def _particle_for(value: str, written: str) -> str:
+    with_final = next((a for a, b in _PAIRS.items() if written in (a, b)), written)
+    without_final = _PAIRS.get(with_final, written)
+    sound = _final_sound(value)
+    if with_final == "으로":  # ㄹ 받침 뒤에는 '로' (교실로, total로)
+        return "으로" if sound == "other" else "로"
+    return with_final if sound else without_final
 
 
 def values_of(match: Match) -> dict[str, object]:
