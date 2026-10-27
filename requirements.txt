@@ -1,0 +1,10 @@
+# Keep this file ASCII only: pip on Korean Windows reads it as cp949.
+# Pinned to the versions the test suite passes with. Bump them together and rerun pytest.
+# Python 3.12 (.python-version): the syntax-error cases match Python 3.12 error messages.
+fastapi==0.141.1
+starlette==1.6.0
+pydantic==2.13.5
+uvicorn[standard]==0.53.0
+websockets==17.1
+pytest==9.1.1
+httpx==0.28.1

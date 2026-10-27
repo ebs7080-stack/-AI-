@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>오류별 힌트 - 코딩입문 중고등학생을 위한 단계적 피드백 웹서비스</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar teacher-bar">
+    <a class="brand" href="/classes.html">
+      <img src="/logo.svg" alt="" width="32" height="32">
+      <span class="brand-name"><small>코딩입문 중고등학생을 위한</small><b>단계적 피드백 웹서비스</b></span>
+    </a>
+    <div class="topbar-right">
+      <span class="user-chip"><span class="avatar" aria-hidden="true">👩‍🏫</span><span id="who"></span></span>
+      <a class="btn btn-secondary" href="/classes.html">← 내 교실</a>
+      <a class="btn btn-secondary" href="/account.html">계정 설정</a>
+      <button id="logout" class="btn btn-secondary" type="button">로그아웃</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="dash-head">
+      <div>
+        <span class="pill">TEACHER</span>
+        <h1>오류별 힌트</h1>
+        <p class="muted">학생 코드에서 문법 오류나 자주 하는 실수를 찾았을 때 한 단계씩 열어 보는 힌트 문구예요. 선생님 수업에 맞게 고쳐 쓸 수 있어요.</p>
+      </div>
+    </section>
+
+    <div class="notice hint-guide">
+      <ul>
+        <li>여기서 고친 문구는 <strong>내 모든 교실</strong>에 적용돼요. 저장한 뒤에 학생이 <strong>새로 제출하는 코드</strong>부터 쓰이고, 이미 제출된 코드의 힌트는 바뀌지 않아요.</li>
+        <li>학생은 위에서부터 한 단계씩 열어 봐요. 단계는 1개에서 6개까지 둘 수 있어요.</li>
+        <li><code>{line}</code>처럼 중괄호로 쓴 자리는 학생 코드에서 찾은 값으로 바뀌어요. 오류마다 쓸 수 있는 자리가 아래에 적혀 있어요.</li>
+        <li>문구 안에서 <code>`if`</code>처럼 백틱으로 감싼 부분은 학생 화면에서 코드 모양으로 보여요.</li>
+        <li>고친 코드를 그대로 알려 주기보다, 어디를 보고 무엇을 떠올리면 되는지를 적어 주세요.</li>
+      </ul>
+    </div>
+    <p id="page-error" class="error" role="alert"></p>
+
+    <div id="hint-list" class="hint-list"></div>
+  </main>
+  <script src="/hints.js"></script>
+</body>
+</html>

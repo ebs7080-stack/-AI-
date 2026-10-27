@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>내 교실 - 코딩입문 중고등학생을 위한 단계적 피드백 웹서비스</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar teacher-bar">
+    <a class="brand" href="/classes.html">
+      <img src="/logo.svg" alt="" width="32" height="32">
+      <span class="brand-name"><small>코딩입문 중고등학생을 위한</small><b>단계적 피드백 웹서비스</b></span>
+    </a>
+    <div class="topbar-right">
+      <span class="user-chip"><span class="avatar" aria-hidden="true">👩‍🏫</span><span id="who"></span></span>
+      <a class="btn btn-secondary" href="/account.html">계정 설정</a>
+      <button id="logout" class="btn btn-secondary" type="button">로그아웃</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="dash-head">
+      <div>
+        <span class="pill">TEACHER</span>
+        <h1>내 교실</h1>
+        <p class="muted">교실을 만들고 학생들의 학번을 등록하세요. 학생은 교실 코드와 학번으로 입장합니다. 친구 돕기와 채팅은 교실마다 도움 시간을 열었을 때만 됩니다.</p>
+      </div>
+      <a class="btn btn-secondary" href="/hints.html">💡 오류별 힌트 고치기 →</a>
+    </section>
+    <p id="page-error" class="error" role="alert"></p>
+
+    <section class="card" aria-labelledby="create-title">
+      <div class="panel-head">
+        <span class="icon-tile amber" aria-hidden="true">🏫</span>
+        <div class="grow">
+          <h2 id="create-title">새 교실 만들기</h2>
+          <p class="sub">학생 명단은 지금 넣어도 되고, 교실을 만든 뒤에 추가해도 됩니다.</p>
+        </div>
+      </div>
+      <form id="create-form">
+        <label for="class-name">교실 이름</label>
+        <input id="class-name" type="text" maxlength="50" placeholder="예: 1학년 3반 정보" autocomplete="off" required>
+        <label for="class-roster">학생 명단 (한 줄에 한 명: 학번, 그리고 원하면 이름)</label>
+        <textarea id="class-roster" class="roster-input" placeholder="10301 김철수&#10;10302 이영희&#10;10303" spellcheck="false"></textarea>
+        <p class="muted small roster-help">엑셀에서 학번과 이름 두 열을 복사해 붙여 넣어도 됩니다. 이름을 비우면 화면에 학번이 대신 보여요.</p>
+        <button class="btn btn-amber" type="submit">교실 만들기 →</button>
+        <p id="create-error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <div id="class-list" class="class-list"></div>
+  </main>
+  <script src="/helptime.js"></script>
+  <script src="/classes.js"></script>
+</body>
+</html>

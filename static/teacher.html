@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>교사 로그인 - 코딩입문 중고등학생을 위한 단계적 피드백 웹서비스</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img src="/logo.svg" alt="" width="32" height="32">
+      <span class="brand-name"><small>코딩입문 중고등학생을 위한</small><b>단계적 피드백 웹서비스</b></span>
+    </a>
+    <a class="btn btn-secondary" href="/">← 학생 입장 화면으로</a>
+  </header>
+
+  <div class="landing" style="min-height:calc(100vh - 64px)">
+    <div class="landing-inner">
+      <header class="hero">
+        <span class="pill">TEACHER</span>
+        <h1>교사 페이지</h1>
+        <p>로그인하면 내 교실을 만들고, 학생 명단을 등록하고, 대시보드를 볼 수 있어요.</p>
+      </header>
+
+      <div class="role-grid">
+        <section class="card role-card" aria-labelledby="login-title">
+          <div class="top">
+            <span class="icon-tile large" aria-hidden="true">🔑</span>
+            <span class="badge">LOGIN</span>
+          </div>
+          <h2 id="login-title">로그인</h2>
+          <p class="muted">가입할 때 만든 아이디와 비밀번호를 입력하세요.</p>
+          <form id="login-form" class="grow">
+            <label for="login-username">아이디</label>
+            <input id="login-username" type="text" maxlength="20" autocomplete="username" required>
+            <label for="login-password">비밀번호</label>
+            <input id="login-password" type="password" maxlength="100" autocomplete="current-password" required>
+            <button class="btn btn-primary btn-block" type="submit">로그인 →</button>
+            <p id="login-error" class="error" role="alert"></p>
+          </form>
+        </section>
+
+        <section class="card role-card" aria-labelledby="signup-title">
+          <div class="top">
+            <span class="icon-tile large amber" aria-hidden="true">🏫</span>
+            <span class="badge amber">SIGN UP</span>
+          </div>
+          <h2 id="signup-title">회원 가입</h2>
+          <p class="muted">처음이라면 교사 계정을 만드세요. 가입하면 바로 로그인됩니다.</p>
+          <form id="signup-form" class="grow">
+            <label for="signup-name">이름</label>
+            <input id="signup-name" type="text" maxlength="20" placeholder="예: 김선생" autocomplete="name" required>
+            <label for="signup-username">아이디</label>
+            <input id="signup-username" type="text" minlength="4" maxlength="20" pattern="[A-Za-z0-9_]+" placeholder="영문·숫자·밑줄 4~20자" autocomplete="username" required>
+            <label for="signup-password">비밀번호</label>
+            <input id="signup-password" type="password" minlength="8" maxlength="100" placeholder="8자 이상" autocomplete="new-password" required>
+            <label for="signup-password2">비밀번호 확인</label>
+            <input id="signup-password2" type="password" minlength="8" maxlength="100" autocomplete="new-password" required>
+            <div id="invite-field" hidden>
+              <label for="signup-invite">초대 코드</label>
+              <input id="signup-invite" type="text" maxlength="100" autocomplete="off">
+              <p class="muted small" style="margin-top:6px">이 서버는 초대 코드를 받은 선생님만 가입할 수 있어요.</p>
+            </div>
+            <button class="btn btn-amber btn-block" type="submit">가입하기 →</button>
+            <p id="signup-error" class="error" role="alert"></p>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script src="/teacher.js"></script>
+</body>
+</html>

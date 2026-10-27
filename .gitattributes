@@ -1,0 +1,2 @@
+# start.bat / stop.bat 은 CRLF 줄 끝을 유지해야 한다 (CLAUDE.md 참고).
+*.bat text eol=crlf

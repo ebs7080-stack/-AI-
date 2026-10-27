@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- 웹 앱(app/, static/) 전용 ---
+# 학생 닉네임·세션 등 실제 사용자 데이터가 든 DB 파일. 절대 올리지 않는다.
+*.db
+*.db-wal
+*.db-shm
+.claude/settings.local.json
+# Claude Code 가 남기는 개인 설정(기기·계정 식별자 포함)
+.claude.json
+# start_public.bat 이 쓰는 터널 프로그램(cloudflared.exe)을 넣어 두는 폴더
+tools/

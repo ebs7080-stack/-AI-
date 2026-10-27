@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" fill="none">
+  <rect width="120" height="120" rx="28" fill="#EFF6FF"/>
+  <!-- Python snake motif in friendly geometric rounded curves -->
+  <!-- Blue snake segment -->
+  <path d="M58 24C42 24 34 32 34 44H62V52H26C18 52 14 62 14 72C14 84 22 92 38 92H46V80C46 68 54 60 66 60H74V44C74 32 66 24 58 24Z" fill="#2563EB" opacity="0.95"/>
+  <circle cx="44" cy="36" r="4" fill="#FFFFFF"/>
+  <!-- Yellow snake segment -->
+  <path d="M62 96C78 96 86 88 86 76H58V68H94C102 68 106 58 106 48C106 36 98 28 82 28H74V40C74 52 66 60 54 60H46V76C46 88 54 96 62 96Z" fill="#F59E0B" opacity="0.95"/>
+  <circle cx="76" cy="84" r="4" fill="#FFFFFF"/>
+  <!-- Code bracket accent -->
+  <path d="M22 60L16 66L22 72" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M98 48L104 54L98 60" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
