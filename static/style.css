@@ -311,8 +311,9 @@ textarea {
 
 .brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; min-width: 0; }
 .brand img { width: 32px; height: 32px; flex: none; }
-.brand b { color: var(--primary-ink); font-size: 1.125rem; font-weight: 700; letter-spacing: -0.01em; }
-.brand span { font-weight: 600; white-space: nowrap; }
+.brand-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.brand-name small { color: var(--muted); font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.brand-name b { color: var(--primary-ink); font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
 
 .topbar-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
@@ -917,7 +918,7 @@ textarea {
 
 @media (max-width: 640px) {
   .topbar { padding: 0 16px; }
-  .brand span { display: none; }
+  .brand-name small { display: none; }
   .hero h1 { font-size: 1.75rem; line-height: 2.25rem; }
   .role-card { padding: 24px; }
   .history button { grid-template-columns: auto minmax(0, 1fr); }
@@ -947,6 +948,12 @@ textarea {
 
 .roster { display: grid; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
 .roster form .btn, #create-form .btn { margin-top: 12px; }
+/* ---------- 교사: 계정 설정 ---------- */
+
+.workspace.narrow { max-width: 720px; }
+.account-info { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 24px; margin: 0; }
+.account-info dt { color: var(--muted); font-size: 0.8125rem; font-weight: 600; }
+.account-info dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .password-form { max-width: 420px; }
 .password-form .btn { margin-top: 16px; }
 .password-form [role="status"] { margin-top: 12px; color: var(--green-ink); font-weight: 500; }
@@ -1068,4 +1075,15 @@ textarea {
   .hint-step { grid-template-columns: minmax(0, 1fr); }
   .hint-step .step-num { display: none; }
   .hint-step > .btn { justify-self: end; }
+}
+
+/* 교사 화면의 상단 바는 버튼이 여러 개라, 좁은 화면에서는 이름표를 접어 버튼이 화면 밖으로 밀리지 않게 한다. */
+@media (max-width: 720px) {
+  .teacher-bar { padding: 0 12px; gap: 8px; }
+  .teacher-bar .topbar-right { gap: 6px; }
+  .teacher-bar .user-chip { display: none; }
+  .teacher-bar .btn { padding: 0 10px; font-size: 0.8125rem; }
+}
+@media (max-width: 420px) {
+  .teacher-bar .brand-name { display: none; }
 }

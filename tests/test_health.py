@@ -14,4 +14,4 @@ def test_health():
 def test_index_served():
     r = client.get("/")
     assert r.status_code == 200
-    assert "코드 웹 분석 도구" in r.text
+    assert "코딩입문 중고등학생을 위한 단계적 피드백 웹서비스" in r.text

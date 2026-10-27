@@ -1,11 +1,11 @@
 import json
 import sqlite3
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import analysis, hints
-from .auth import SESSION_COOKIE, SESSION_MAX_AGE, current_student, hash_token, new_token
+from . import analysis, hints, ratelimit
+from .auth import SESSION_COOKIE, SESSION_MAX_AGE, current_student, hash_token, new_token, secure_cookies
 from .db import get_db
 from .hub import publish
 from .threads import active_session_id, close_thread, finding_out, submission_out
@@ -41,7 +41,8 @@ def _profile(student: sqlite3.Row) -> dict:
 
 
 @router.post("/join")
-def join(body: JoinRequest, response: Response, db: sqlite3.Connection = Depends(get_db)):
+def join(body: JoinRequest, request: Request, response: Response, db: sqlite3.Connection = Depends(get_db)):
+    ratelimit.check(request)
     # 교사가 그 교실에 미리 등록한 학번만 들어올 수 있다 (비밀번호는 없다).
     student = db.execute(
         """
@@ -53,6 +54,7 @@ def join(body: JoinRequest, response: Response, db: sqlite3.Connection = Depends
     ).fetchone()
     # 교실 코드가 틀린 경우와 학번이 없는 경우를 구별해 알려 주지 않는다.
     if student is None:
+        ratelimit.record_failure(request)
         raise HTTPException(
             status_code=401,
             detail="교실 코드 또는 학번이 맞지 않아요. 선생님이 등록해 준 학번인지 확인해 주세요.",
@@ -65,7 +67,12 @@ def join(body: JoinRequest, response: Response, db: sqlite3.Connection = Depends
             (hash_token(token), student["id"]),
         )
     response.set_cookie(
-        SESSION_COOKIE, token, max_age=SESSION_MAX_AGE, httponly=True, samesite="lax"
+        SESSION_COOKIE,
+        token,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=secure_cookies(),
     )
     return _profile(student)
 

@@ -268,25 +268,6 @@ $("create-form").addEventListener("submit", async (event) => {
   }
 });
 
-$("password-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  $("password-error").textContent = "";
-  $("password-done").textContent = "";
-  try {
-    if ($("password-new").value !== $("password-new2").value) {
-      throw new Error("새 비밀번호와 새 비밀번호 확인이 서로 달라요.");
-    }
-    await api("/api/teacher/password", {
-      method: "POST",
-      body: { current_password: $("password-current").value, new_password: $("password-new").value },
-    });
-    for (const id of ["password-current", "password-new", "password-new2"]) $(id).value = "";
-    $("password-done").textContent = "비밀번호를 바꿨어요. 다음부터는 새 비밀번호로 로그인하세요.";
-  } catch (err) {
-    $("password-error").textContent = err.message;
-  }
-});
-
 $("logout").addEventListener("click", async () => {
   await fetch("/api/teacher/logout", { method: "POST" });
   location.href = "/teacher.html";
@@ -296,7 +277,6 @@ $("logout").addEventListener("click", async () => {
   try {
     const me = await api("/api/teacher/me");
     $("who").textContent = `${me.name} 선생님`;
-    $("password-username").value = me.username;
     classes = await api("/api/teacher/classes");
     render();
   } catch (err) {

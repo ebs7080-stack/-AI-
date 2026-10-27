@@ -53,6 +53,7 @@ $("signup-form").addEventListener("submit", async (event) => {
       name: $("signup-name").value,
       username: $("signup-username").value,
       password: $("signup-password").value,
+      invite_code: $("signup-invite").value,
     });
     if (!res.ok) {
       throw new Error(
@@ -64,6 +65,16 @@ $("signup-form").addEventListener("submit", async (event) => {
     $("signup-error").textContent = err.message;
   }
 });
+
+// 서버가 초대 코드를 요구하면 그 칸을 보여 준다.
+fetch("/api/teacher/signup-info")
+  .then((res) => (res.ok ? res.json() : null))
+  .then((info) => {
+    if (!info?.invite_required) return;
+    $("invite-field").hidden = false;
+    $("signup-invite").required = true;
+  })
+  .catch(() => {});
 
 // 이미 로그인되어 있으면 바로 내 교실로 간다.
 fetch("/api/teacher/me")

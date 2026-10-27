@@ -3,6 +3,7 @@ from contextlib import ExitStack
 import pytest
 from fastapi.testclient import TestClient
 
+from app import ratelimit
 from app.main import app
 
 PASSWORD = "correct-horse-1"
@@ -11,6 +12,10 @@ PASSWORD = "correct-horse-1"
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("CWA_DB_PATH", str(tmp_path / "test.db"))
+    # 개발 PC 에 공개용 설정이 남아 있어도 테스트는 기본 상태에서 돈다.
+    monkeypatch.delenv("CWA_PUBLIC", raising=False)
+    monkeypatch.delenv("CWA_SIGNUP_CODE", raising=False)
+    ratelimit.reset()
     with TestClient(app) as c:
         yield c
 

@@ -1,4 +1,5 @@
 import hashlib
+import os
 import secrets
 import sqlite3
 
@@ -16,6 +17,19 @@ TEACHER_SESSION_MAX_AGE = 60 * 60 * 12  # 12시간
 
 # scrypt 비용. 로그인 한 번에 수십 ms 가 걸려 비밀번호 무차별 대입을 느리게 만든다.
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
+
+
+def secure_cookies() -> bool:
+    """인터넷에 공개해서 HTTPS 로 접속할 때(CWA_PUBLIC=1)는 쿠키가 HTTPS 로만 나가게 한다.
+
+    내 PC 에서 http://127.0.0.1 로 쓸 때 켜면 브라우저가 쿠키를 보내지 않아 로그인이 안 되므로 기본은 꺼 둔다.
+    """
+    return os.environ.get("CWA_PUBLIC") == "1"
+
+
+def signup_code() -> str:
+    """교사 회원 가입에 필요한 초대 코드. 비어 있으면 누구나 가입할 수 있다 (CWA_SIGNUP_CODE)."""
+    return os.environ.get("CWA_SIGNUP_CODE", "").strip()
 
 
 def new_token() -> str:

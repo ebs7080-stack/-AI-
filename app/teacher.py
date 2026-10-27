@@ -8,7 +8,7 @@
 import secrets
 import sqlite3
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 from .auth import (
@@ -21,8 +21,10 @@ from .auth import (
     new_token,
     owned_class,
     password_matches,
+    secure_cookies,
+    signup_code,
 )
-from . import helptime, hints
+from . import helptime, hints, ratelimit
 from .db import get_db
 from .hub import publish
 from .stats import class_dashboard, unit_progress
@@ -51,6 +53,8 @@ class Signup(BaseModel):
     username: str = Field(min_length=4, max_length=20, pattern=r"^[A-Za-z0-9_]+$")
     password: str = Field(min_length=8, max_length=100)
     name: str = Field(min_length=1, max_length=20)
+    # 서버가 초대 코드를 요구할 때만 쓴다 (CWA_SIGNUP_CODE).
+    invite_code: str = Field(default="", max_length=100)
 
     _strip_name = field_validator("name")(_not_blank)
 
@@ -158,14 +162,27 @@ def _start_session(db: sqlite3.Connection, response: Response, teacher_id: int) 
         path=TEACHER_COOKIE_PATH,
         httponly=True,
         samesite="lax",
+        secure=secure_cookies(),
     )
 
 
 # ---------- 계정 ----------
 
 
+@router.get("/signup-info")
+def signup_info():
+    """가입 화면이 초대 코드 칸을 보여 줄지 정하는 데 쓴다. 코드 자체는 알려 주지 않는다."""
+    return {"invite_required": bool(signup_code())}
+
+
 @router.post("/signup", status_code=201)
-def signup(body: Signup, response: Response, db: sqlite3.Connection = Depends(get_db)):
+def signup(body: Signup, request: Request, response: Response, db: sqlite3.Connection = Depends(get_db)):
+    required = signup_code()
+    if required:
+        ratelimit.check(request)
+        if not secrets.compare_digest(required.encode(), body.invite_code.strip().encode()):
+            ratelimit.record_failure(request)
+            raise HTTPException(status_code=403, detail="초대 코드가 맞지 않습니다.")
     try:
         with db:
             teacher_id = db.execute(
@@ -179,13 +196,15 @@ def signup(body: Signup, response: Response, db: sqlite3.Connection = Depends(ge
 
 
 @router.post("/login")
-def login(body: Login, response: Response, db: sqlite3.Connection = Depends(get_db)):
+def login(body: Login, request: Request, response: Response, db: sqlite3.Connection = Depends(get_db)):
+    ratelimit.check(request)
     teacher = db.execute(
         "SELECT id, username, name, password_hash FROM teachers WHERE username = ?",
         (body.username.strip(),),
     ).fetchone()
     # 아이디가 없는 경우와 비밀번호가 틀린 경우를 구별해 알려 주지 않는다.
     if not password_matches(teacher, body.password):
+        ratelimit.record_failure(request)
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 맞지 않습니다.")
     _start_session(db, response, teacher["id"])
     return {"username": teacher["username"], "name": teacher["name"]}

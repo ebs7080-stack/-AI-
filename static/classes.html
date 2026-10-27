@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>내 교실 - 코드 웹 분석 도구</title>
+  <title>내 교실 - 코딩입문 중고등학생을 위한 단계적 피드백 웹서비스</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,13 +11,14 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar teacher-bar">
     <a class="brand" href="/classes.html">
       <img src="/logo.svg" alt="" width="32" height="32">
-      <b>PyLearn</b><span>파이썬 버디</span>
+      <span class="brand-name"><small>코딩입문 중고등학생을 위한</small><b>단계적 피드백 웹서비스</b></span>
     </a>
     <div class="topbar-right">
       <span class="user-chip"><span class="avatar" aria-hidden="true">👩‍🏫</span><span id="who"></span></span>
+      <a class="btn btn-secondary" href="/account.html">계정 설정</a>
       <button id="logout" class="btn btn-secondary" type="button">로그아웃</button>
     </div>
   </header>
@@ -53,29 +54,6 @@
     </section>
 
     <div id="class-list" class="class-list"></div>
-
-    <section class="card" aria-labelledby="password-title">
-      <div class="panel-head">
-        <span class="icon-tile" aria-hidden="true">🔑</span>
-        <div class="grow">
-          <h2 id="password-title">비밀번호 변경</h2>
-          <p class="sub">바꾸면 다른 기기에 남아 있던 로그인은 모두 끊깁니다.</p>
-        </div>
-      </div>
-      <form id="password-form" class="password-form">
-        <!-- 브라우저 비밀번호 관리자가 어느 계정의 비밀번호인지 알 수 있게 아이디를 함께 둔다. -->
-        <input id="password-username" type="text" autocomplete="username" readonly hidden>
-        <label for="password-current">지금 비밀번호</label>
-        <input id="password-current" type="password" maxlength="100" autocomplete="current-password" required>
-        <label for="password-new">새 비밀번호</label>
-        <input id="password-new" type="password" minlength="8" maxlength="100" placeholder="8자 이상" autocomplete="new-password" required>
-        <label for="password-new2">새 비밀번호 확인</label>
-        <input id="password-new2" type="password" minlength="8" maxlength="100" autocomplete="new-password" required>
-        <button class="btn btn-primary" type="submit">비밀번호 바꾸기</button>
-        <p id="password-done" class="muted" role="status"></p>
-        <p id="password-error" class="error" role="alert"></p>
-      </form>
-    </section>
   </main>
   <script src="/helptime.js"></script>
   <script src="/classes.js"></script>

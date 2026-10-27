@@ -31,7 +31,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Code Web Analyzer", lifespan=lifespan)
+app = FastAPI(title="코딩입문 중고등학생을 위한 단계적 피드백 웹서비스", lifespan=lifespan)
 
 
 @app.get("/api/health")

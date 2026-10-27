@@ -19,6 +19,8 @@ python -m venv .venv
 
 `start.bat`(서버 시작 + 브라우저 열기, `NO_BROWSER`를 정의하면 브라우저를 열지 않음)와 `stop.bat`(8000번 포트의 파이썬 프로세스 종료)로 더블클릭 실행도 가능하다. 두 파일은 CRLF 줄 끝을 유지해야 한다. 셸에서 시험할 때는 `cmd.exe //c ".\\start.bat"`처럼 `.\`를 붙인다.
 
+**시연용 공개 주소**: `start_public.bat`은 서버를 공개용 설정으로 켜고 Cloudflare 빠른 터널(`cloudflared tunnel --url`)로 임시 `https://….trycloudflare.com` 주소를 만든다. `cloudflared`가 PATH나 `tools\cloudflared.exe`에 있어야 한다(`winget install --id Cloudflare.cloudflared`). 주소는 실행할 때마다 바뀌고 창을 닫으면 사라진다. 이 배치는 `CWA_PUBLIC=1`(쿠키에 `Secure`), `CWA_SIGNUP_CODE`(교사 가입 초대 코드, 실행마다 새로 만들어 화면에 보여 줌), `CWA_DB_PATH=demo.db`(평소의 `data.db`와 분리)를 정한다. 서버는 여전히 127.0.0.1에만 열리고 바깥에서는 터널로만 들어온다. `start_public.bat`도 CRLF를 유지한다.
+
 린터/포매터는 아직 설정하지 않았다.
 
 ## 구조
@@ -29,11 +31,12 @@ python -m venv .venv
 - `app/teacher.py`: 교사 회원 가입/로그인/로그아웃(`/api/teacher/signup|login|logout|me`), 교실 목록·생성(`/api/teacher/classes`), 학생 명단 조회·추가·삭제(`/api/teacher/classes/{id}`, `.../students`), 교실별 대시보드(`.../dashboard`), 수업 단원과 진도(`.../units`, `.../units/{unit_id}`, `.../current-unit`), 비밀번호 변경(`/api/teacher/password`: 지금 비밀번호 확인, 다른 기기의 세션은 끊음). `app/stats.py`: 대시보드 통계 계산(요약·오류 유형별·날짜별·단원별 진도·학생별). 단원 진도는 `unit_progress()`가 계산하고 교사 API 도 같은 함수를 쓴다. 라우트는 얇게, SQL 집계는 `stats.py`에 둔다.
 - `app/collab.py`: 화면 상태(`/api/status`), 스레드 조회·완료(`/api/threads*`), 도우미 매칭(`/api/help/start`, `/api/help/{id}/end`), WebSocket 채팅(`/api/help/{id}/ws`). 응답 모양과 접근 권한 규칙(주인 또는 지금 돕는 친구만 본다)은 `app/threads.py`에 모여 있다.
 - `app/hints.py`: 교사가 고쳐 쓴 오류별 힌트 문구(`teacher_hints` 테이블: 교사 id + case_id → 단계 문구 틀 JSON). 고친 case만 저장하고 나머지는 `cases.toml`의 기본 문구를 쓴다. 교사 API는 `GET /api/teacher/hints`, `PUT /api/teacher/hints/{case_id} {steps}`(1~6단계, 이름 20자·문구 500자), `DELETE`(기본값으로). 제출할 때 `api.create_submission`이 그 교실 교사의 문구로 `analysis.with_custom_steps`를 적용한다.
+- `app/ratelimit.py`: 같은 주소(IP)에서 교사 로그인·학생 입장·초대 코드가 10분 안에 20번 틀리면 429로 막는다(메모리에만 기록). 터널 뒤에서는 uvicorn이 `X-Forwarded-For`를 읽어 `request.client`에 실제 접속자 주소를 넣어 준다(기본값으로 127.0.0.1에서 온 프록시 헤더만 믿는다). 공개용 설정은 `auth.secure_cookies()`와 `auth.signup_code()`가 환경 변수에서 읽는다.
 - `app/helptime.py`: 교실의 도움 시간(`classes.help_until`) 상태·열기/늘리기·끝내기와, 시간이 지난 도움 짝을 끝내는 `close_expired`. 교사 API는 `POST /api/teacher/classes/{id}/help-time {minutes}`(닫혀 있으면 열고 열려 있으면 그만큼 늘림)와 `DELETE`(즉시 종료)다.
 - `app/chat_filter.py`(정답 붙여넣기 차단, 임시 규칙), `app/hub.py`(채팅방 연결 목록과 이벤트 발행).
 - `app/db.py`: SQLite 스키마(`SCHEMA`)와 연결 헬퍼, `_migrate`(스레드 도입 전 DB를 올림), `_migrate_accounts`(교사 키 + 닉네임 시절 DB를 교사 계정 + 학번 구조로 올림). DB 파일은 프로젝트 루트의 `data.db`이며 `CWA_DB_PATH` 환경 변수로 바꾼다. 경로는 호출 시점에 읽으므로 테스트에서 환경 변수만 바꾸면 격리된다.
 - `app/analysis.py`: 코드 분석기의 경계. 웹 계층은 `analyze(code) -> list[Finding]`만 안다. 지금은 **1단계(문법 검사)** 만 한다: 문법 오류면 case 하나, 아니면 빈 목록. 안쪽은 `app/analyzer/`에 있다 — `cases.toml`(case별 id·분류·교사용 이름·[관찰, 의심 지점, 힌트] 문구), `catalog.py`(TOML 로드, `{line}` 같은 자리 채우기), `syntax.py`(`ast.parse`의 SyntaxError 메시지 + 오류 줄 원문 → case_id). 다음 단계(이름·스코프, AST 규칙)는 `Match(case_id, line, values)`를 돌려주는 모듈을 `app/analyzer/`에 더하고 `cases.toml`에 문구를 넣으면 된다.
-- `static/`: 빌드 없는 프론트엔드. `index.html`+`app.js`(학생: 왼쪽에 제출한 코드 버전 스트림, 오른쪽에 힌트·채팅), `teacher.html`+`teacher.js`(교사 로그인·회원 가입), `classes.html`+`classes.js`(내 교실 목록, 교실 만들기, 학생 명단 관리), `hints.html`+`hints.js`(오류별 힌트 문구 편집, 내 교실 화면에서 들어간다), `helptime.js`(내 교실과 대시보드가 함께 쓰는 도움 시간 조절기 `createHelpTimeControl`), `dashboard.html`+`dashboard.js`(교실 대시보드, 주소의 `?class=교실id`로 교실을 고른다: 기간 필터, 요약 타일, 날짜별 제출 막대, 오류 유형 가로 막대, 단원 진도 카드, 학생별 표), 공통 `style.css`, `logo.svg`. 디자인은 Stitch 프로젝트 "파이썬 코딩 튜터 플랫폼"(`projects/277067431342448928`)의 토큰과 화면을 따른다.
+- `static/`: 빌드 없는 프론트엔드. `index.html`+`app.js`(학생: 왼쪽에 제출한 코드 버전 스트림, 오른쪽에 힌트·채팅), `teacher.html`+`teacher.js`(교사 로그인·회원 가입), `classes.html`+`classes.js`(내 교실 목록, 교실 만들기, 학생 명단 관리), `account.html`+`account.js`(계정 설정: 계정 정보와 비밀번호 변경. 교사 화면 상단 바의 '계정 설정' 버튼으로 들어간다), `hints.html`+`hints.js`(오류별 힌트 문구 편집, 내 교실 화면에서 들어간다), `helptime.js`(내 교실과 대시보드가 함께 쓰는 도움 시간 조절기 `createHelpTimeControl`), `dashboard.html`+`dashboard.js`(교실 대시보드, 주소의 `?class=교실id`로 교실을 고른다: 기간 필터, 요약 타일, 날짜별 제출 막대, 오류 유형 가로 막대, 단원 진도 카드, 학생별 표), 공통 `style.css`, `logo.svg`. 디자인은 Stitch 프로젝트 "파이썬 코딩 튜터 플랫폼"(`projects/277067431342448928`)의 토큰과 화면을 따른다.
 - `tests/`: pytest. `pyproject.toml`의 `pythonpath = ["."]` 덕분에 `from app...`으로 바로 import 한다. `conftest.py`의 `client`/`student`/`other_client` 픽스처는 테스트마다 임시 DB를 쓴다. `teacher`는 가입이 끝난 교사 브라우저, `make_teacher(아이디)`는 다른 교사, `make_class(이름)`은 교실, `make_student(학번)`은 그 학번을 명단에 등록한 뒤 입장한 학생 브라우저를 만든다(`cls=`, `by=`로 다른 교실·다른 교사).
 
 ## GitHub 협업
@@ -43,7 +46,7 @@ python -m venv .venv
 - **지금 작업 브랜치는 `feature/student-number-login`이다** (2026-10-12부터, PR: `.../pull/new/feature/student-number-login`). 교사 계정·학번 로그인, 도움 시간, 문법 오류 피드백, 힌트 문구 편집이 여기에 있다.
 - 예전 브랜치 `feature/pylearn-web-app`의 원격에는 다른 세션이 올린 커밋 2개(`5190c84`, `3fa0f0b`: `app/teacher_portal.py`, `db/` 마이그레이션 v1→v4, 단원·진도 관리, 학생별 오답률)가 있다. 같은 교사 계정 기능을 다른 방식으로 구현한 것이라 이 브랜치와 `teachers` 테이블, `classes.teacher_id`, `static/classes.html`·`classes.js`, `/api/teacher/classes`가 충돌한다(그쪽은 교사 키와 닉네임 입장을 유지한다). 그래서 그 브랜치에 push 하지 않고 새 브랜치를 만들었다. 그쪽의 단원·진도 기능은 2026-10-25 에 이 브랜치 방식(인라인 마이그레이션, 뷰 없음)으로 다시 구현해 옮겼다. **두 작업을 어떻게 합칠지는 아직 정하지 않았다** — `main`에 넣기 전에 사용자와 정한다. 로컬의 `feature/pylearn-web-app`은 원격보다 1개 앞서고 2개 뒤처져 있으니 거기서 push 하지 않는다.
 - `data.db`(학생 닉네임 등)와 `.claude.json`(개인 설정)은 `.gitignore`에 있다. 절대 커밋하지 않는다.
-- GitHub는 코드만 보관하고 앱을 실행하지 않는다. 온라인 배포를 하려면 영구 디스크, 서버 프로세스 1개(채팅 허브가 메모리), HTTPS·`Secure` 쿠키, 교사 가입 제한(지금은 누구나 가입)과 로그인 시도 제한이 먼저 필요하다.
+- GitHub는 코드만 보관하고 앱을 실행하지 않는다. 온라인 배포를 하려면 영구 디스크, 서버 프로세스 1개(채팅 허브가 메모리), HTTPS와 공개용 설정(`CWA_PUBLIC=1`, `CWA_SIGNUP_CODE`)이 먼저 필요하다. 임시 시연은 `start_public.bat`으로 한다.
 - `claude-mem` 플러그인이 설치돼 있다(요금제 기반·로컬 전용·텔레메트리 꺼짐). 폴더별 `CLAUDE.md`를 자동 생성할 수 있으니 `git status`로 확인하고 팀 저장소에 올리지 않는다. 제거는 `npx claude-mem uninstall`.
 
 ## 인증과 힌트 공개 방식
@@ -104,7 +107,8 @@ python -m venv .venv
 - 채팅 정답 차단은 1차로 "``` 코드블록이 있거나 파이썬 문장처럼 보이는 줄이 3줄 이상이면 막는다, 한 줄 조각은 허용"이다 (`app/chat_filter.py`). 설명 문장의 한글을 코드로 오인하지 않게 문자열·주석을 뺀 뒤 한글이 남으면 설명으로 본다.
 
 **알려진 한계·미해결**
-- 교사 회원 가입은 누구나 할 수 있다(초대 코드·승인 없음). 비밀번호 찾기(잊었을 때 재설정), 로그인 시도 횟수 제한, 교실 이름 변경·삭제, 학생 이름 수정은 아직 없다.
+- 교사 회원 가입은 `CWA_SIGNUP_CODE`를 정하지 않으면 누구나 할 수 있다(`start.bat`은 정하지 않는다). 비밀번호 찾기(잊었을 때 재설정), 교실 이름 변경·삭제, 학생 이름 수정은 아직 없다.
+- 공개 주소는 시연용이다. 학생 입장에는 여전히 비밀번호가 없어서 교실 코드와 학번을 아는 사람은 그 학생으로 들어올 수 있고, 실패 횟수 제한은 주소(IP)별이라 여러 주소를 쓰는 공격은 막지 못한다. 실제 학생 데이터로 상시 공개하려면 PIN 같은 보완이 먼저 필요하다. 실제 터널을 거친 접속은 아직 확인하지 않았다(터널이 붙이는 헤더를 흉내 내 로그인·쿠키·채팅 Origin 검사만 확인).
 - 개편 전에 만든 교실은 마이그레이션 뒤 `teacher_id`가 비어 주인이 없다(교사 화면에 안 나옴, 교사 키 열은 삭제됨). 그 교실의 학생은 쓰던 닉네임이 학번이 되어 그대로 입장할 수 있다.
 - 대시보드의 날짜는 한국 시간(UTC+9) 고정이다. 다른 시간대를 쓰려면 `stats.py`의 `KST_OFFSET_HOURS`를 바꾼다. 날짜별 차트는 90일까지만 그린다.
 - 교사 로그인 페이지는 로그인 여부를 `/api/teacher/me`로 확인하므로(로그인돼 있으면 `/classes.html`로 보낸다) 로그아웃 상태에서 열면 브라우저 콘솔에 401이 한 줄 찍힌다 (정상).

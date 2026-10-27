@@ -223,3 +223,5 @@ __marimo__/
 .claude/settings.local.json
 # Claude Code 가 남기는 개인 설정(기기·계정 식별자 포함)
 .claude.json
+# start_public.bat 이 쓰는 터널 프로그램(cloudflared.exe)을 넣어 두는 폴더
+tools/

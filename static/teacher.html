@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>교사 로그인 - 코드 웹 분석 도구</title>
+  <title>교사 로그인 - 코딩입문 중고등학생을 위한 단계적 피드백 웹서비스</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
   <header class="topbar">
     <a class="brand" href="/">
       <img src="/logo.svg" alt="" width="32" height="32">
-      <b>PyLearn</b><span>파이썬 버디</span>
+      <span class="brand-name"><small>코딩입문 중고등학생을 위한</small><b>단계적 피드백 웹서비스</b></span>
     </a>
     <a class="btn btn-secondary" href="/">← 학생 입장 화면으로</a>
   </header>
@@ -61,6 +61,11 @@
             <input id="signup-password" type="password" minlength="8" maxlength="100" placeholder="8자 이상" autocomplete="new-password" required>
             <label for="signup-password2">비밀번호 확인</label>
             <input id="signup-password2" type="password" minlength="8" maxlength="100" autocomplete="new-password" required>
+            <div id="invite-field" hidden>
+              <label for="signup-invite">초대 코드</label>
+              <input id="signup-invite" type="text" maxlength="100" autocomplete="off">
+              <p class="muted small" style="margin-top:6px">이 서버는 초대 코드를 받은 선생님만 가입할 수 있어요.</p>
+            </div>
             <button class="btn btn-amber btn-block" type="submit">가입하기 →</button>
             <p id="signup-error" class="error" role="alert"></p>
           </form>
