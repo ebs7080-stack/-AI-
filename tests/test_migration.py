@@ -112,3 +112,15 @@ def test_db_from_before_units_gains_the_unit_columns_and_triggers(tmp_path, monk
     }
     assert {"trg_classes_current_unit_ins", "trg_classes_current_unit_upd"} <= triggers
     conn.close()
+
+
+def test_db_uses_wal_and_waits_for_locks(client):
+    """여러 학생이 동시에 쓸 때 상태 폴링(읽기)이 제출(쓰기)을 막지 않고, 잠금은 기다렸다가 쓴다."""
+    from app.db import BUSY_TIMEOUT_SECONDS, get_connection
+
+    conn = get_connection()
+    try:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == BUSY_TIMEOUT_SECONDS * 1000
+    finally:
+        conn.close()

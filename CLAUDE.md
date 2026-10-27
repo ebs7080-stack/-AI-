@@ -21,6 +21,8 @@ python -m venv .venv
 
 **시연용 공개 주소**: `start_public.bat`은 서버를 공개용 설정으로 켜고 Cloudflare 빠른 터널(`cloudflared tunnel --url`)로 임시 `https://….trycloudflare.com` 주소를 만든다. `cloudflared`가 PATH나 `tools\cloudflared.exe`에 있어야 한다(`winget install --id Cloudflare.cloudflared`). 주소는 실행할 때마다 바뀌고 창을 닫으면 사라진다. 이 배치는 `CWA_PUBLIC=1`(쿠키에 `Secure`), `CWA_SIGNUP_CODE`(교사 가입 초대 코드, 실행마다 새로 만들어 화면에 보여 줌), `CWA_DB_PATH=demo.db`(평소의 `data.db`와 분리)를 정한다. 서버는 여전히 127.0.0.1에만 열리고 바깥에서는 터널로만 들어온다. `start_public.bat`도 CRLF를 유지한다.
 
+`requirements.txt`는 테스트를 통과한 버전으로 고정돼 있고 **ASCII만** 쓴다(한국어 윈도우의 pip가 cp949로 읽어 한글 주석이 있으면 설치가 멈춘다, `tests/test_health.py`가 검증). 파이썬은 3.12(`.python-version`)이고, 다른 버전으로 서버를 켜면 문법 오류 분류가 어긋날 수 있다는 경고가 로그에 찍힌다.
+
 린터/포매터는 아직 설정하지 않았다.
 
 ## 구조
@@ -33,8 +35,9 @@ python -m venv .venv
 - `app/hints.py`: 교사가 고쳐 쓴 오류별 힌트 문구(`teacher_hints` 테이블: 교사 id + case_id → 단계 문구 틀 JSON). 고친 case만 저장하고 나머지는 `cases.toml`의 기본 문구를 쓴다. 교사 API는 `GET /api/teacher/hints`, `PUT /api/teacher/hints/{case_id} {steps}`(1~6단계, 이름 20자·문구 500자), `DELETE`(기본값으로). 제출할 때 `api.create_submission`이 그 교실 교사의 문구로 `analysis.with_custom_steps`를 적용한다.
 - `app/ratelimit.py`: 같은 주소(IP)에서 교사 로그인·학생 입장·초대 코드가 10분 안에 20번 틀리면 429로 막는다(메모리에만 기록). 터널 뒤에서는 uvicorn이 `X-Forwarded-For`를 읽어 `request.client`에 실제 접속자 주소를 넣어 준다(기본값으로 127.0.0.1에서 온 프록시 헤더만 믿는다). 공개용 설정은 `auth.secure_cookies()`와 `auth.signup_code()`가 환경 변수에서 읽는다.
 - `app/helptime.py`: 교실의 도움 시간(`classes.help_until`) 상태·열기/늘리기·끝내기와, 시간이 지난 도움 짝을 끝내는 `close_expired`. 교사 API는 `POST /api/teacher/classes/{id}/help-time {minutes}`(닫혀 있으면 열고 열려 있으면 그만큼 늘림)와 `DELETE`(즉시 종료)다.
+- 채팅 WebSocket(`help_chat`)은 async라서 SQL을 `run_in_threadpool`로 돌린다. 이벤트 루프에서 DB 잠금을 기다리면 서버 전체가 멈추기 때문이다. 새 async 코드에서도 지킨다.
 - `app/chat_filter.py`(정답 붙여넣기 차단, 임시 규칙), `app/hub.py`(채팅방 연결 목록과 이벤트 발행).
-- `app/db.py`: SQLite 스키마(`SCHEMA`)와 연결 헬퍼, `_migrate`(스레드 도입 전 DB를 올림), `_migrate_accounts`(교사 키 + 닉네임 시절 DB를 교사 계정 + 학번 구조로 올림). DB 파일은 프로젝트 루트의 `data.db`이며 `CWA_DB_PATH` 환경 변수로 바꾼다. 경로는 호출 시점에 읽으므로 테스트에서 환경 변수만 바꾸면 격리된다.
+- `app/db.py`: SQLite 스키마(`SCHEMA`)와 연결 헬퍼, `_migrate`(스레드 도입 전 DB를 올림), `_migrate_accounts`(교사 키 + 닉네임 시절 DB를 교사 계정 + 학번 구조로 올림). 연결은 쓰기 잠금을 15초까지 기다리고(`BUSY_TIMEOUT_SECONDS`), `init_db`가 WAL 모드를 켠다(읽기가 쓰기를 막지 않음, `data.db-wal`·`-shm` 파일이 함께 생긴다). DB 파일은 프로젝트 루트의 `data.db`이며 `CWA_DB_PATH` 환경 변수로 바꾼다. 경로는 호출 시점에 읽으므로 테스트에서 환경 변수만 바꾸면 격리된다.
 - `app/analysis.py`: 코드 분석기의 경계. 웹 계층은 `analyze(code) -> list[Finding]`만 안다. 지금은 **1단계(문법 검사)** 만 한다: 문법 오류면 case 하나, 아니면 빈 목록. 안쪽은 `app/analyzer/`에 있다 — `cases.toml`(case별 id·분류·교사용 이름·[관찰, 의심 지점, 힌트] 문구), `catalog.py`(TOML 로드, `{line}` 같은 자리 채우기), `syntax.py`(`ast.parse`의 SyntaxError 메시지 + 오류 줄 원문 → case_id). 다음 단계(이름·스코프, AST 규칙)는 `Match(case_id, line, values)`를 돌려주는 모듈을 `app/analyzer/`에 더하고 `cases.toml`에 문구를 넣으면 된다.
 - `static/`: 빌드 없는 프론트엔드. `index.html`+`app.js`(학생: 왼쪽에 제출한 코드 버전 스트림, 오른쪽에 힌트·채팅), `teacher.html`+`teacher.js`(교사 로그인·회원 가입), `classes.html`+`classes.js`(내 교실 목록, 교실 만들기, 학생 명단 관리), `account.html`+`account.js`(계정 설정: 계정 정보와 비밀번호 변경. 교사 화면 상단 바의 '계정 설정' 버튼으로 들어간다), `hints.html`+`hints.js`(오류별 힌트 문구 편집, 내 교실 화면에서 들어간다), `helptime.js`(내 교실과 대시보드가 함께 쓰는 도움 시간 조절기 `createHelpTimeControl`), `dashboard.html`+`dashboard.js`(교실 대시보드, 주소의 `?class=교실id`로 교실을 고른다: 기간 필터, 요약 타일, 날짜별 제출 막대, 오류 유형 가로 막대, 단원 진도 카드, 학생별 표), 공통 `style.css`, `logo.svg`. 디자인은 Stitch 프로젝트 "파이썬 코딩 튜터 플랫폼"(`projects/277067431342448928`)의 토큰과 화면을 따른다.
 - `tests/`: pytest. `pyproject.toml`의 `pythonpath = ["."]` 덕분에 `from app...`으로 바로 import 한다. `conftest.py`의 `client`/`student`/`other_client` 픽스처는 테스트마다 임시 DB를 쓴다. `teacher`는 가입이 끝난 교사 브라우저, `make_teacher(아이디)`는 다른 교사, `make_class(이름)`은 교실, `make_student(학번)`은 그 학번을 명단에 등록한 뒤 입장한 학생 브라우저를 만든다(`cls=`, `by=`로 다른 교실·다른 교사).
@@ -98,7 +101,7 @@ python -m venv .venv
 - 학생 코드는 웹 서버 프로세스에서 `exec`하지 않는다. 별도 프로세스 + 타임아웃으로 격리한다.
 - 첫 작업은 `오류case.txt`를 `id`·탐지 방식이 붙은 JSON/YAML로 바꾸는 것이다. 이 `id`가 `Finding.case_id`, 힌트 문구, 교사 통계(FR-3)를 잇는다.
 
-**다음 후보**: (1) 남은 FR-2: LLM이 도우미 역할을 대신하는 매칭(FR-2.2), 추가 도움 요청·교사 호출(FR-2.5), (2) 정적 분석 2단계(이름·스코프: 미정의 이름, 오타 추천)와 3단계(가이드 5장의 AST 레시피). 대시보드의 오류 유형 통계는 지금 문법 case만 나온다. 교사용 이름은 `cases.toml`의 `category`·`label`에서 온다. 어느 쪽을 먼저 할지는 사용자와 정한다.
+**다음 후보**: (1) 남은 FR-2: LLM이 도우미 역할을 대신하는 매칭(FR-2.2), 추가 도움 요청(FR-2.5, 다른 친구나 LLM에게. 교사 호출은 2026-10-25에 빼기로 했다), (2) 정적 분석 2단계(이름·스코프: 미정의 이름, 오타 추천)와 3단계(가이드 5장의 AST 레시피). 대시보드의 오류 유형 통계는 지금 문법 case만 나온다. 교사용 이름은 `cases.toml`의 `category`·`label`에서 온다. 어느 쪽을 먼저 할지는 사용자와 정한다.
 
 **이미 정한 결정**
 - 학생 인증은 비밀번호 없는 교실 코드 + 학번이다 (사용자가 2026-10-12에 정함, 그 전에는 닉네임이었다). 같은 교실 친구의 학번을 알면 그 학생으로 들어갈 수 있다는 점은 닉네임 시절과 같다. 필요하면 PIN을 나중에 붙인다.

@@ -13,6 +13,7 @@ import sqlite3
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_in_threadpool
 
 from . import chat_filter, helptime
 from .auth import SESSION_COOKIE, current_student, student_for_token
@@ -184,8 +185,11 @@ def start_helping(db: sqlite3.Connection = Depends(get_db), student: sqlite3.Row
                     "INSERT INTO help_sessions (thread_id, helper_id) VALUES (?, ?)",
                     (candidate["thread_id"], student["id"]),
                 )
-        except sqlite3.IntegrityError:  # 그 사이 다른 도우미가 먼저 맡았다.
-            continue
+        except sqlite3.IntegrityError:
+            # 같은 학생이 버튼을 두 번 눌러 다른 요청이 먼저 짝을 만들었으면, 다음 후보를 볼 필요 없이 409 다.
+            if _helping_row(db, student["id"]) is not None:
+                raise HTTPException(status_code=409, detail="이미 친구를 도와주는 중이에요.") from None
+            continue  # 그 사이 다른 도우미가 그 친구를 먼저 맡았다.
         return {
             "session_id": cur.lastrowid,
             "thread_id": candidate["thread_id"],
@@ -238,10 +242,38 @@ def _message_out(db: sqlite3.Connection, row: sqlite3.Row) -> dict:
 
 async def _close_expired(db: sqlite3.Connection, class_id: int) -> list[int]:
     """WebSocket 쪽에서 쓰는 helptime.close_expired. 끝낸 짝의 채팅방에 알린다."""
-    ended = helptime.close_expired(db, class_id)
+    ended = await run_in_threadpool(helptime.close_expired, db, class_id)
     for session_id in ended:
         await hub.broadcast(session_id, {"type": "ended", "reason": "time"})
     return ended
+
+
+def _history(db: sqlite3.Connection, session_id: int) -> list[dict]:
+    rows = db.execute(
+        """
+        SELECT m.id, m.body, m.created_at, st.name, m.sender_id
+        FROM messages m JOIN students st ON st.id = m.sender_id
+        WHERE m.help_session_id = ? ORDER BY m.id DESC LIMIT ?
+        """,
+        (session_id, HISTORY_LIMIT),
+    ).fetchall()
+    return [_message_out(db, r) for r in reversed(rows)]
+
+
+def _save_message(db: sqlite3.Connection, session_id: int, sender_id: int, body: str) -> dict:
+    with db:
+        message_id = db.execute(
+            "INSERT INTO messages (help_session_id, sender_id, body) VALUES (?, ?, ?)",
+            (session_id, sender_id, body),
+        ).lastrowid
+    row = db.execute(
+        """
+        SELECT m.id, m.body, m.created_at, st.name, m.sender_id
+        FROM messages m JOIN students st ON st.id = m.sender_id WHERE m.id = ?
+        """,
+        (message_id,),
+    ).fetchone()
+    return _message_out(db, row)
 
 
 @router.websocket("/help/{session_id}/ws")
@@ -256,26 +288,20 @@ async def help_chat(
         await websocket.close(code=4403)
         return
 
+    # SQL 은 run_in_threadpool 로 돌린다. 이벤트 루프에서 DB 잠금을 기다리면 서버 전체가 멈춘다.
     db = get_connection()
     try:
-        student = student_for_token(db, session)
+        student = await run_in_threadpool(student_for_token, db, session)
         if student is not None:
             await _close_expired(db, student["class_id"])
-        room = _participant_session(db, session_id, student["id"]) if student else None
+        room = await run_in_threadpool(_participant_session, db, session_id, student["id"]) if student else None
         if student is None or room is None or room["status"] != "active":
             await websocket.close(code=4404)
             return
 
         await websocket.accept()
-        history = db.execute(
-            """
-            SELECT m.id, m.body, m.created_at, st.name, m.sender_id
-            FROM messages m JOIN students st ON st.id = m.sender_id
-            WHERE m.help_session_id = ? ORDER BY m.id DESC LIMIT ?
-            """,
-            (session_id, HISTORY_LIMIT),
-        ).fetchall()
-        await websocket.send_json({"type": "history", "messages": [_message_out(db, r) for r in reversed(history)]})
+        history = await run_in_threadpool(_history, db, session_id)
+        await websocket.send_json({"type": "history", "messages": history})
         hub.join(session_id, websocket)
 
         while True:
@@ -291,7 +317,7 @@ async def help_chat(
             if session_id in await _close_expired(db, student["class_id"]):
                 await websocket.close()
                 return
-            room = _participant_session(db, session_id, student["id"])
+            room = await run_in_threadpool(_participant_session, db, session_id, student["id"])
             if room is None or room["status"] != "active":
                 await websocket.send_json({"type": "ended", "reason": "ended"})
                 await websocket.close()
@@ -306,19 +332,7 @@ async def help_chat(
                 await websocket.send_json({"type": "blocked", "reason": reason})
                 continue
 
-            with db:
-                message_id = db.execute(
-                    "INSERT INTO messages (help_session_id, sender_id, body) VALUES (?, ?, ?)",
-                    (session_id, student["id"], body),
-                ).lastrowid
-            row = db.execute(
-                """
-                SELECT m.id, m.body, m.created_at, st.name, m.sender_id
-                FROM messages m JOIN students st ON st.id = m.sender_id WHERE m.id = ?
-                """,
-                (message_id,),
-            ).fetchone()
-            await hub.broadcast(session_id, _message_out(db, row))
+            await hub.broadcast(session_id, await run_in_threadpool(_save_message, db, session_id, student["id"], body))
     except WebSocketDisconnect:
         pass
     finally:

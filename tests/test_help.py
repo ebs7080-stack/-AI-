@@ -97,6 +97,24 @@ def test_cannot_help_twice_or_while_own_code_is_open(pair):
     assert submit_attempt.status_code == 409  # 철수는 고치는 중
 
 
+def test_double_click_while_matching_is_409_not_404(pair, make_student, monkeypatch):
+    """버튼을 두 번 눌러 두 요청이 겹치면, 늦은 요청은 앞의 검사를 지난 뒤 짝 만들기에서 막힌다."""
+    from app import collab
+
+    _, helper, _, _ = pair
+    submit(make_student("민수"))  # 도움이 필요한 다른 친구가 있어 후보는 남아 있다
+    real = collab._helping_row
+    calls = []
+
+    def first_check_misses(db, student_id):
+        calls.append(student_id)
+        return None if len(calls) == 1 else real(db, student_id)  # 첫 검사 때는 앞 요청이 아직 안 끝났다
+
+    monkeypatch.setattr(collab, "_helping_row", first_check_misses)
+    r = helper.post("/api/help/start")
+    assert r.status_code == 409 and "도와주는 중" in r.json()["detail"]
+
+
 def test_helper_can_view_the_thread_only_while_matched(pair, make_student):
     b, helper, thread, matched = pair
     tid = thread["thread_id"]

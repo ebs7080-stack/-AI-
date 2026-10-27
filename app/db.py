@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data.db"
+BUSY_TIMEOUT_SECONDS = 15
 
 SCHEMA = """
 -- 교사 계정. 회원 가입으로 만들고 아이디 + 비밀번호로 로그인한다. 비밀번호는 해시만 저장한다.
@@ -143,7 +144,8 @@ def db_path() -> Path:
 
 def get_connection() -> sqlite3.Connection:
     # 동기 엔드포인트는 스레드 풀에서 실행되어 의존성의 시작과 종료가 다른 스레드일 수 있다.
-    conn = sqlite3.connect(db_path(), check_same_thread=False)
+    # 여러 학생이 동시에 쓰면 쓰기 잠금을 기다려야 한다. 기본 5초로는 한 교실이 넘게 몰릴 때 모자란다.
+    conn = sqlite3.connect(db_path(), check_same_thread=False, timeout=BUSY_TIMEOUT_SECONDS)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -237,6 +239,8 @@ def _migrate_units(conn: sqlite3.Connection) -> None:
 def init_db() -> None:
     conn = get_connection()
     try:
+        # WAL 이면 읽기가 쓰기를 막지 않아 상태 폴링이 제출을 기다리게 하지 않는다. DB 파일에 남는 설정이다.
+        conn.execute("PRAGMA journal_mode = WAL")
         _drop_legacy_teacher_sessions(conn)
         conn.executescript(SCHEMA)
         _migrate_accounts(conn)

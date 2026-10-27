@@ -1,3 +1,5 @@
+import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +12,8 @@ from .db import init_db
 from .teacher import router as teacher_router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+# 문법 오류 분류(app/analyzer/syntax.py)는 이 버전의 오류 메시지 문구로 맞춰 두었다.
+SUPPORTED_PYTHON = (3, 12)
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -27,6 +31,13 @@ class NoCacheStaticFiles(StaticFiles):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if sys.version_info[:2] != SUPPORTED_PYTHON:
+        # 서버는 그대로 켜되, 문법 오류가 엉뚱한 case 로 분류될 수 있음을 알린다.
+        logging.getLogger("uvicorn.error").warning(
+            "파이썬 %d.%d 에서 실행 중입니다. 문법 오류 분류는 %d.%d 에 맞춰져 있으니 "
+            "tests/test_syntax.py 를 먼저 돌려 보세요.",
+            *sys.version_info[:2], *SUPPORTED_PYTHON,
+        )
     init_db()
     yield
 
