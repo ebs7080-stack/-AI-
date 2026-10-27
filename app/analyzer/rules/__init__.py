@@ -104,8 +104,9 @@ def _is_exit_call(n: ast.AST) -> bool:
 class Stores:
     """이름마다 어떤 값이 대입됐는지 모은다. 코드 전체를 한 스코프처럼 본다 (입문자 코드라 충분하다).
 
-    'x = 값' 꼴의 대입만 값을 기억하고, 그 밖의 방법(for 변수, +=, 매개변수, 여러 개 대입 ...)으로
+    'x = 값' 꼴의 대입만 값을 기억하고, 그 밖의 방법(for 변수, 매개변수, 여러 개 대입 ...)으로
     바뀐 이름은 값을 알 수 없는 것으로 표시한다. 그래서 '모든 대입이 숫자 상수다' 같은 판단이 안전하다.
+    x += ... 는 값의 종류를 바꾸지 않으므로(숫자는 숫자, 글자는 글자로 남거나 그 줄에서 멈춘다) 모른다고 치지 않는다.
     """
 
     def __init__(self, tree: ast.Module):
@@ -126,7 +127,7 @@ class Stores:
         simple = {
             id(t) for n in ast.walk(tree) if isinstance(n, ast.Assign)
             for t in n.targets if isinstance(t, ast.Name)
-        }
+        } | {id(n.target) for n in ast.walk(tree) if isinstance(n, ast.AugAssign)}
         for node in ast.walk(tree):
             if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)) and id(node) not in simple:
                 self.unknown.add(node.id)
@@ -163,17 +164,43 @@ def is_raw_input(n: ast.AST) -> bool:
     return is_call_to(n, "input")
 
 
+ARITHMETIC = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+
+
+def is_number(n: ast.AST, stores: Stores, seen: frozenset[str] = frozenset()) -> bool:
+    """확실히 숫자인 식: 숫자 상수, int()·len() 같은 호출, 숫자끼리의 계산, 숫자만 대입된 변수."""
+    if is_number_const(n) or is_call_to(n, *NUMBER_CALLS):
+        return True
+    if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)):
+        return is_number(n.operand, stores, seen)
+    if isinstance(n, ast.BinOp) and isinstance(n.op, ARITHMETIC):
+        return is_number(n.left, stores, seen) and is_number(n.right, stores, seen)
+    if isinstance(n, ast.Name):
+        if n.id in seen:
+            return True  # total = total + 1 처럼 자기 자신을 쓰는 대입은 나머지 쪽으로 판단한다
+        return stores.only(n.id, lambda v: is_number(v, stores, seen | {n.id}))
+    return False
+
+
+def is_text(n: ast.AST) -> bool:
+    return is_str_const(n) or isinstance(n, ast.JoinedStr) or is_call_to(n, "str", "input")
+
+
+def starts_as_number(name: str, stores: Stores) -> bool:
+    """total = 0 처럼 숫자로 시작했고 글자를 대입한 적은 없는 변수 (뒤에서 계산식으로 바뀌어도 된다)."""
+    values = stores.values.get(name, [])
+    return (name not in stores.unknown and any(is_number_const(v) for v in values)
+            and not any(is_text(v) for v in values))
+
+
 def kind(n: ast.AST, stores: Stores) -> type | None:
     """그 식이 확실히 숫자인지(int) 문자열인지(str). 모르면 None."""
-    if is_number_const(n) or is_call_to(n, *NUMBER_CALLS):
+    if is_number(n, stores):
         return int
     if is_str_const(n) or isinstance(n, ast.JoinedStr) or is_call_to(n, "str"):
         return str
-    if isinstance(n, ast.Name):
-        if stores.only(n.id, lambda v: is_number_const(v) or is_call_to(v, *NUMBER_CALLS)):
-            return int
-        if stores.only(n.id, lambda v: is_str_const(v) or isinstance(v, ast.JoinedStr)):
-            return str
+    if isinstance(n, ast.Name) and stores.only(n.id, lambda v: is_str_const(v) or isinstance(v, ast.JoinedStr)):
+        return str
     return None
 
 

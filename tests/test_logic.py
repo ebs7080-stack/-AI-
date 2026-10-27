@@ -24,6 +24,8 @@ BAD = [
     ("a = input()\nprint(a + 1)\n", "var.input_not_converted", 2),
     ("a = input()\nprint(a * 2)\n", "var.input_not_converted", 2),
     ("total = 0\na = input()\ntotal += a\nprint(total)\n", "var.input_not_converted", 3),
+    ("total = 0\nfor i in range(3):\n    n = input()\n    total = total + n\n", "var.input_not_converted", 4),
+    ("s = [90, 80]\navg = sum(s) / len(s)\nprint('평균은 ' + avg)\n", "var.str_plus_number", 3),
     ("x = 1\nx + 1\nprint(x)\n", "var.result_not_stored", 2),
     ("x = 1\nx == 5\nprint(x)\n", "var.eq_as_assign", 2),
     ("a = 1\nb = 2\na = b\nb = a\nprint(a, b)\n", "var.swap_without_temp", 3),
@@ -90,7 +92,6 @@ GOOD = [
     "i = 0\nwhile i < 5:\n    print(i)\n    i += 1\n",
     "a = [1, 2]\nwhile len(a) > 0:\n    a.pop()\n",
     "x = ''\nwhile x != 'q':\n    x = input()\n",
-    "i = 0\nwhile i < 5:\n    if i == 3:\n        break\n    print(i)\n",
     "count = 0\nfor x in [1, -2, 3]:\n    if x > 0:\n        count += 1\nprint(count)\n",
     "found = 0\nfor x in [1, 2]:\n    if x == 2:\n        found = 1\nprint(found)\n",  # 표시(flag)는 1 로 둬도 된다
     "scores = [90, 80]\nfor i in range(len(scores)):\n    print(scores[i])\nfor s in scores:\n    print(s)\n",
@@ -231,3 +232,77 @@ def test_submission_with_a_logic_error(student):
     assert "while_no_update" not in r.text and "무한" not in r.text  # 열기 전에는 무엇인지 나가지 않는다
     revealed = student.post(f"/api/findings/{finding['id']}/reveal").json()["revealed"]
     assert revealed[0]["label"] == "관찰"
+
+
+# ---------- 서비스 전체 흐름 ----------
+
+
+def _submit(client, code, thread_id=None):
+    body = {"code": code} if thread_id is None else {"code": code, "thread_id": thread_id}
+    r = client.post("/api/submissions", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def _reveal_all(client, finding):
+    revealed = []
+    for _ in range(finding["total_steps"]):
+        revealed = client.post(f"/api/findings/{finding['id']}/reveal").json()["revealed"]
+    return revealed
+
+
+def test_fixing_one_mistake_shows_the_next_one(student):
+    """한 번에 하나씩: 고쳐서 같은 스레드에 다시 내면 다음 실수가 나오고, 다 고치면 빈 목록이다."""
+    code = "def area(w, h):\n    return w * h\n\nprint(area(3))\nfor i in range(3):\n    for i in range(2):\n        print(i)\n"
+    first = _submit(student, code)
+    assert _reveal_all(student, first["findings"][0])[1]["text"].startswith("4번 줄에서 `area`에 값을 1개")
+    second = _submit(student, code.replace("area(3)", "area(3, 4)"), first["thread_id"])
+    assert "6번 줄의 안쪽 `for`" in _reveal_all(student, second["findings"][0])[1]["text"]
+    third = _submit(student, code.replace("area(3)", "area(3, 4)").replace("for i in range(2)", "for j in range(2)"),
+                    first["thread_id"])
+    assert third["findings"] == [] and third["thread_status"] == "open"  # 다 고쳤는지는 학생이 정한다
+
+
+def test_dashboard_counts_logic_cases(teacher, classroom, make_student):
+    for no in ("s1", "s2"):
+        _submit(make_student(no), "i = 0\nwhile i < 5:\n    print(i)\n")
+    errors = teacher.get(f"/api/teacher/classes/{classroom['id']}/dashboard").json()["errors"]
+    assert errors == [{
+        "case_id": "loop.while_no_update",
+        "label": "[반복문] while 문에서 조건을 바꾸는 문장을 빠뜨려 무한 반복하기",
+        "students": 2, "threads": 2,
+    }]
+
+
+def test_teacher_wording_applies_to_logic_cases(teacher, student):
+    steps = [
+        {"label": "관찰", "text": "반복이 멈추지 않아요."},
+        {"label": "의심 지점", "text": "{line}번 줄 `while`의 `{name}`을 따라가 보세요."},
+        {"label": "힌트", "text": "`{name}`이 언제 바뀌나요? {unknown} 은 그대로 둔다."},
+    ]
+    assert teacher.put("/api/teacher/hints/loop.while_no_update", json={"steps": steps}).status_code == 200
+    finding = _submit(student, "n = 3\nwhile n > 0:\n    print(n)\n")["findings"][0]
+    assert [s["text"] for s in _reveal_all(student, finding)] == [
+        "반복이 멈추지 않아요.",
+        "2번 줄 `while`의 `n`을 따라가 보세요.",
+        "`n`이 언제 바뀌나요? {unknown} 은 그대로 둔다.",
+    ]
+    placeholders = next(c for c in teacher.get("/api/teacher/hints").json() if c["id"] == "loop.while_no_update")
+    assert [p["name"] for p in placeholders["placeholders"]] == ["line", "name"]  # 편집 화면에 쓸 수 있는 자리를 알려 준다
+
+
+# 알고도 놓치는 것 (미탐). 잡도록 바꾸면 이 목록에서 BAD 로 옮긴다.
+KNOWN_MISSES = [
+    # break 가 있으면 끝날 수 있다고 보고 넘어간다. 여기서는 i 가 0 에 머물러 break 에 닿지 못해 끝나지 않는다.
+    "i = 0\nwhile i < 5:\n    if i == 3:\n        break\n    print(i)\n",
+    # 이번 범위 밖: 경계값, range 끝, 이름 오타, 만들기 전 사용, 최댓값 초기값 0
+    "score = int(input())\nif score > 60:\n    print('합격')\n",
+    "total = 0\nfor i in range(5):\n    totla = total + i\nprint(total)\n",
+    "print(result)\nresult = 3\n",
+    "m = 0\nfor n in [-3, -1]:\n    if n > m:\n        m = n\n",
+]
+
+
+@pytest.mark.parametrize("code", KNOWN_MISSES)
+def test_known_misses_are_documented(code):
+    assert analysis.analyze(code) == []

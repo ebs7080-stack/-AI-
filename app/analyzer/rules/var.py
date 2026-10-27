@@ -4,7 +4,8 @@ import ast
 
 from .. import Match
 from . import (
-    Stores, blocks, code_of, is_call_to, is_number_const, is_raw_input, is_str_const, kind, rule, walk_local, SCOPES,
+    SCOPES, Stores, blocks, code_of, is_call_to, is_number_const, is_raw_input, is_str_const, kind, rule,
+    starts_as_number, walk_local,
 )
 
 # 학생이 변수 이름으로 자주 쓰는 내장 함수. 이 이름에 값을 넣은 뒤 함수로 부르면 멈춘다.
@@ -63,16 +64,18 @@ def input_not_converted(tree: ast.Module):
     def is_raw(n):
         return isinstance(n, ast.Name) and n.id in raw
 
+    def numeric(n):  # 숫자이거나, total = 0 처럼 숫자로 시작한 변수
+        return kind(n, stores) is int or (isinstance(n, ast.Name) and starts_as_number(n.id, stores))
+
     for n in ast.walk(tree):
         if isinstance(n, ast.BinOp) and isinstance(n.op, MATH_OPS):
             for side, other in ((n.left, n.right), (n.right, n.left)):
-                if is_raw(side) and kind(other, stores) is int:
+                if is_raw(side) and numeric(other):
                     yield Match("var.input_not_converted", n.lineno, {"name": side.id})
                     break
         elif isinstance(n, ast.AugAssign) and is_raw(n.value) and isinstance(n.target, ast.Name):
             # total = 0 ... total += a : total 이 숫자로 시작했는데 글자를 더한다.
-            starts = stores.values.get(n.target.id, [])
-            if starts and all(is_number_const(v) for v in starts):
+            if starts_as_number(n.target.id, stores):
                 yield Match("var.input_not_converted", n.lineno, {"name": n.value.id})
         elif isinstance(n, ast.Compare):
             items = [n.left, *n.comparators]
