@@ -83,7 +83,8 @@ def test_classify_bad_code(code, case_id, line):
 @pytest.mark.parametrize("code", GOOD)
 def test_good_code_is_not_flagged(code):
     assert syntax.classify(code) is None
-    assert analysis.analyze(code) == []
+    # 실행하면 틀리는 코드는 논리 규칙(test_logic.py)이 잡을 수 있지만, 문법 오류로 나오지는 않는다.
+    assert not any(analysis.is_syntax_case(f.case_id) for f in analysis.analyze(code))
 
 
 def test_code_is_never_executed(tmp_path):
@@ -211,4 +212,4 @@ def test_fixing_the_syntax_error_clears_the_feedback(student):
     thread = student.get(f"/api/threads/{first['thread_id']}").json()
     assert [s["syntax_error"] for s in thread["submissions"]] == [True, False]
     assert fixed["findings"] == []
-    assert fixed["thread_status"] == "open"  # 문법만 본 것이므로 다 고쳤는지는 학생이 정한다
+    assert fixed["thread_status"] == "open"  # 찾은 것이 없어도 맞다는 보장은 없으므로 다 고쳤는지는 학생이 정한다

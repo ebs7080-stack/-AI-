@@ -16,6 +16,12 @@ PLACEHOLDERS = {
     "opener": "딸린 문장이 와야 하는 줄의 종류 (if, for, def 등)",
     "opener_line": "그 줄의 번호",
     "char": "문제가 된 글자",
+    "other_line": "함께 볼 다른 줄 번호 (함수 정의, 반복문 시작 등)",
+    "name": "문제가 된 변수·함수 이름",
+    "name2": "함께 볼 다른 이름",
+    "expr": "학생이 쓴 식",
+    "count": "실제로 쓴 개수",
+    "expected": "필요한 개수",
 }
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 

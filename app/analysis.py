@@ -4,9 +4,14 @@
 안에 있고, 규칙을 늘려도 API/DB/화면은 그대로 둘 수 있다.
 """
 
+import ast
 from dataclasses import dataclass, field, replace
 
-from .analyzer import catalog, syntax
+from .analyzer import Match, catalog, rules, syntax
+
+# 한 번에 보여 줄 의심 지점 수. 초보자가 무엇부터 고칠지 헷갈리지 않게 하나만 보여 주고,
+# 고쳐서 다시 내면 다음 것이 나온다 (2026-10-27 사용자 결정).
+MAX_FINDINGS = 1
 
 
 @dataclass(frozen=True)
@@ -42,16 +47,33 @@ def is_syntax_case(case_id: str) -> bool:
 def analyze(code: str) -> list[Finding]:
     """코드의 의심 지점을 찾는다. 코드를 실행하지 않는다.
 
-    지금은 1단계인 문법 검사만 한다. 문법 오류가 있으면 그 case 하나만 돌려주고, 없으면 빈 목록이다.
-    빈 목록은 '찾은 문제가 없다'는 뜻이지 코드가 맞다는 보장이 아니다 (이름·논리 오류는 아직 보지 않는다).
+    1) 문법 검사: 문법 오류가 있으면 그 case 하나만 돌려주고 끝낸다 (논리를 따질 수 없다).
+    2) 논리 규칙(rules/): 찾은 것 중 우선순위가 가장 높은 MAX_FINDINGS 개만 돌려준다.
+    빈 목록은 '찾은 문제가 없다'는 뜻이지 코드가 맞다는 보장이 아니다 (규칙은 오탐보다 미탐을 택한다).
     """
     match = syntax.classify(code)
-    if match is None:
-        return []
+    if match is not None:
+        return [_finding(match)]
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return []  # 문법 검사가 읽지 못한 코드 (너무 깊은 중첩 등)
+    return [_finding(m) for m in _pick(rules.run(tree))]
+
+
+def _pick(matches: list[Match]) -> list[Match]:
+    """같은 case·줄은 하나로 합치고, 우선순위(작을수록 먼저)와 줄 순서로 골라낸다."""
+    cases = catalog.cases()
+    unique = {(m.case_id, m.line): m for m in matches if m.case_id in cases}
+    ordered = sorted(unique.values(), key=lambda m: (cases[m.case_id].get("priority", 50), m.line or 0))
+    return ordered[:MAX_FINDINGS]
+
+
+def _finding(match: Match) -> Finding:
     values = catalog.values_of(match)
     default = catalog.cases()[match.case_id]["steps"]
     steps = [HintStep(label, text) for label, text in catalog.fill_steps(default, values)]
-    return [Finding(match.case_id, match.line, steps, values)]
+    return Finding(match.case_id, match.line, steps, values)
 
 
 def with_custom_steps(finding: Finding, templates: list[dict] | None) -> Finding:

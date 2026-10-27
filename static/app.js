@@ -478,11 +478,11 @@ function renderHints() {
   box.hidden = false;
   if (sub.findings.length === 0) {
     const empty = el("div", "empty-state");
-    // 지금 분석기는 문법만 본다. 찾은 것이 없다고 코드가 맞다는 뜻은 아니므로 그렇게 말하지 않는다.
+    // 분석기는 확실한 것만 알려 준다(미탐을 택함). 찾은 것이 없다고 코드가 맞다는 뜻은 아니므로 그렇게 말하지 않는다.
     empty.append(
       el("span", "emoji", "✅"),
-      el("p", null, "문법 오류는 찾지 못했어요."),
-      el("p", "small", "지금은 문법만 검사해요. 실행 결과가 생각한 대로인지 직접 확인하고, 다 됐다면 '다 고쳤어요'를 눌러 주세요."),
+      el("p", null, "문법 오류와 자주 하는 실수는 찾지 못했어요."),
+      el("p", "small", "그래도 코드가 맞다는 뜻은 아니에요. 실행 결과가 생각한 대로인지 직접 확인하고, 다 됐다면 '다 고쳤어요'를 눌러 주세요."),
     );
     box.append(empty);
     return;

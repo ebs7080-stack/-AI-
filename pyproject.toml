@@ -1,3 +1,4 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["allow_rule_errors: 논리 규칙의 예외 로그를 일부러 남기는 테스트"]
