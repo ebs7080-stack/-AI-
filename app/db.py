@@ -92,7 +92,6 @@ CREATE TABLE IF NOT EXISTS threads (
     -- 시작할 때의 교실 현재 단원. 나중에 교사가 단원을 넘겨도 이미 시작한 코드의 소속은 그대로 남는다.
     unit_id INTEGER REFERENCES units(id)
 );
-CREATE INDEX IF NOT EXISTS idx_threads_unit ON threads(unit_id, status);
 
 CREATE TABLE IF NOT EXISTS submissions (
     id INTEGER PRIMARY KEY,
