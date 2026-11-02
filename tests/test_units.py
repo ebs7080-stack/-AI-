@@ -314,46 +314,16 @@ def test_other_units_progress_is_not_mixed_in(teacher, classroom, make_student):
     assert first["id"] != second["id"]
 
 
-# ---------- 대시보드에 함께 나온다 ----------
+# ---------- 대시보드에는 나오지 않는다 ----------
 
 
-def test_dashboard_shows_units_and_per_student_progress(teacher, classroom, make_student):
+def test_dashboard_has_no_unit_progress(teacher, classroom, make_student):
     add_unit(teacher, classroom, "변수", target_fixed=2)
     student = make_student("10101", cls=classroom)
-    make_student("10102", cls=classroom)
     fix_one(student)
 
     data = dashboard(teacher, classroom)
-    assert [u["title"] for u in data["units"]] == ["변수"]
-    assert data["units"][0]["is_current"] is True
-
-    rows = {s["student_no"]: s for s in data["students"]}
-    assert (rows["10101"]["unit_fixed"], rows["10101"]["unit_progress_pct"]) == (1, 50.0)
-    assert (rows["10102"]["unit_fixed"], rows["10102"]["unit_progress_pct"]) == (0, 0.0)
-    assert rows["10101"]["unit_target"] == 2
-
-
-def test_dashboard_leaves_progress_blank_without_a_current_unit(teacher, classroom, make_student):
-    student = make_student("10101", cls=classroom)
-    fix_one(student)
-    data = dashboard(teacher, classroom)
-    assert data["units"] == []
-    assert data["students"][0]["unit_progress_pct"] is None
-    assert data["students"][0]["unit_target"] is None
-
-
-def test_unit_progress_ignores_the_period_filter(teacher, classroom, make_student):
-    """기간을 좁혀도 단원 진도는 그대로다 (학기 내내 쌓이는 값이라서)."""
-    add_unit(teacher, classroom, "변수")
-    student = make_student("10101", cls=classroom)
-    fix_one(student)
-    conn = get_connection()
-    with conn:
-        conn.execute("UPDATE threads SET created_at = datetime('now', '-30 days')")
-        conn.execute("UPDATE submissions SET created_at = datetime('now', '-30 days')")
-    conn.close()
-
-    r = teacher.get(f"/api/teacher/classes/{classroom['id']}/dashboard", params={"days": 7})
-    data = r.json()
-    assert data["summary"]["submissions"] == 0  # 기간 밖이라 요약에서는 빠진다
-    assert data["units"][0]["students_done"] == 1  # 진도는 남아 있다
+    assert "units" not in data
+    row = data["students"][0]
+    assert row["fixed"] == 1
+    assert not {"unit_fixed", "unit_target", "unit_progress_pct"} & row.keys()

@@ -47,8 +47,6 @@ def class_dashboard(db: sqlite3.Connection, class_id: int, days: int | None) -> 
         # 수업 전에 한눈에 볼 요약: 지금 단원(없으면 선택한 기간)에서 가장 많이 막힌 오류 몇 개.
         "focus": _focus(db, params),
         "daily": _daily(db, params, start, today),
-        # 단원 진도는 학기 내내 쌓이는 값이라 기간 필터를 걸지 않는다 (걸면 진도가 되돌아간 것처럼 보인다).
-        "units": unit_progress(db, class_id),
         # 아래 학생 상태(고치는 중 등)는 기간과 상관없이 '지금' 기준이고, 숫자만 기간을 따른다.
         "students": _students(db, params, now),
     }
@@ -221,7 +219,7 @@ FOCUS_LIMIT = 3
 def _focus(db: sqlite3.Connection, p: dict) -> dict:
     """가장 많이 막힌 오류 FOCUS_LIMIT 개와, 그 오류에서 지금도 막혀 있는 학생 수.
 
-    지금 단원이 있으면 그 단원에서 시작한 코드만 본다 (단원 진도처럼 기간 필터를 걸지 않는다:
+    지금 단원이 있으면 그 단원에서 시작한 코드만 본다 (기간 필터를 걸지 않는다:
     단원은 여러 날에 걸쳐 진행되니 '이 단원에서 학생들이 어디서 막히는가' 가 수업 준비에 맞는 물음이다).
     지금 단원이 없으면 선택한 기간 전체를 본다.
 
@@ -331,30 +329,6 @@ def _daily(db: sqlite3.Connection, p: dict, start: date | None, today: date) -> 
 
 
 def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
-    # 지금 단원의 목표와, 학생마다 그 단원에서 다 고친 코드 수. 단원을 안 정해 둔 교실이면 비어 있다.
-    unit = db.execute(
-        """
-        SELECT u.id, u.title, u.target_fixed
-        FROM classes c JOIN units u ON u.id = c.current_unit_id
-        WHERE c.id = :class_id
-        """,
-        p,
-    ).fetchone()
-    unit_fixed = (
-        {
-            r["student_id"]: r["n"]
-            for r in db.execute(
-                """
-                SELECT t.student_id, COUNT(*) AS n FROM threads t
-                WHERE t.unit_id = ? AND t.status = 'fixed' GROUP BY t.student_id
-                """,
-                (unit["id"],),
-            )
-        }
-        if unit
-        else {}
-    )
-
     rows = db.execute(
         """
         SELECT st.id, st.student_no, st.name,
@@ -431,16 +405,11 @@ def _students(db: sqlite3.Connection, p: dict, now: datetime) -> list[dict]:
         else:
             state = "idle"
         last = row["last_submission_at"]
-        unit_count = unit_fixed.get(row["id"], 0)
         result.append(
             {
                 "student_no": row["student_no"],
                 "name": row["name"],
                 "state": state,
-                # 지금 단원의 진도. 단원을 안 정해 둔 교실에서는 셋 다 None 이라 화면이 칸을 비운다.
-                "unit_fixed": unit_count if unit else None,
-                "unit_target": unit["target_fixed"] if unit else None,
-                "unit_progress_pct": _progress_pct(unit_count, unit["target_fixed"]) if unit else None,
                 "current_attempts": current["attempts"] if current else None,
                 "current_minutes": (
                     round((now - _parse(current["created_at"])).total_seconds() / 60) if current else None
