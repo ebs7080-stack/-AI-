@@ -227,3 +227,6 @@ __marimo__/
 .claude.json
 # start_public.bat 이 쓰는 터널 프로그램(cloudflared.exe)을 넣어 두는 폴더
 tools/
+# 과제 문서 작업 폴더(양식 docx·발표 자료). 저장소에 올리지 않는다
+/temp/
+/temp2/

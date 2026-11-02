@@ -83,6 +83,40 @@ def test_teacher_key_and_nickname_db_is_moved_to_accounts_and_student_numbers(tm
         assert len(c.get("/api/submissions").json()) == 1
 
 
+def test_existing_threads_table_without_unit_id_is_upgraded(tmp_path, monkeypatch):
+    """threads 는 이미 있고 unit_id 만 없는 DB 도 서버가 켜진다.
+
+    SCHEMA 에 unit_id 인덱스가 있으면 열을 더하기 전에 실행되어 서버 시작이 멈춘다.
+    """
+    path = tmp_path / "threads_without_unit.db"
+    monkeypatch.setenv("CWA_DB_PATH", str(path))
+    conn = sqlite3.connect(path)
+    conn.executescript(LEGACY_SCHEMA)
+    conn.execute(
+        "CREATE TABLE threads (id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES students(id), "
+        "status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL DEFAULT (datetime('now')), closed_at TEXT)"
+    )
+    conn.execute("INSERT INTO classes (name, join_code, teacher_key_hash) VALUES ('반', 'ABC234', 'x')")
+    conn.execute("INSERT INTO students (class_id, nickname) VALUES (1, '철수')")
+    conn.execute("INSERT INTO threads (student_id, status) VALUES (1, 'fixed')")
+    conn.commit()
+    conn.close()
+
+    init_db()
+    init_db()  # 두 번 실행해도 된다
+
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    thread = conn.execute("SELECT student_id, status, unit_id FROM threads").fetchone()
+    assert (thread["student_id"], thread["status"], thread["unit_id"]) == (1, "fixed", None)  # 기록은 그대로다
+    index = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_threads_unit'")
+    assert index.fetchone() is not None
+    conn.close()
+
+    with TestClient(app) as c:
+        assert c.post("/api/join", json={"join_code": "ABC234", "student_no": "철수"}).status_code == 200
+
+
 def test_db_from_before_units_gains_the_unit_columns_and_triggers(tmp_path, monkeypatch):
     """단원 기능이 없던 DB 를 그대로 올릴 수 있다. 기존 교실·학생·기록은 건드리지 않는다."""
     path = tmp_path / "preunits.db"
