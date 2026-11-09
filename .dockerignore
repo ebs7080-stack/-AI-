@@ -1,0 +1,15 @@
+.git
+.venv
+.claude
+__pycache__
+*.db
+*.db-wal
+*.db-shm
+tests
+docs
+tools
+temp
+temp2
+*.docx
+*.pdf
+*.bat
