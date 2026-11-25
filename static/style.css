@@ -442,6 +442,15 @@ textarea {
 .summary-side { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .summary-side .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .summary > .error { flex: 1 0 100%; margin: 0; }
+.explain-form, .explain-view { flex: 1 0 100%; margin: 0; }
+.explain-form label { margin-top: 0; }
+.explain-form .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.explain-view {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface-low);
+  overflow-wrap: anywhere;
+}
 .summary > .error:empty { display: none; }
 
 .stat {
@@ -766,6 +775,7 @@ textarea {
 @media (prefers-color-scheme: dark) { .history .attempt.open { color: var(--amber); } }
 .history .preview { overflow: hidden; font-family: var(--mono); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
 .history .when { color: var(--subtle); font-size: 0.75rem; white-space: nowrap; }
+.history .note { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- 교사 대시보드 ---------- */
 

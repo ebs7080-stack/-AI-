@@ -71,6 +71,7 @@ const state = {
   thread: null, // 화면에 보이는 스레드 (없으면 새 코드 작성 화면)
   threads: [], // 내가 고친 코드 목록
   pinnedThreadId: null, // 방금 끝낸 코드나 지난 코드를 보는 중이면 그 스레드
+  explaining: false, // '다 고쳤어요'를 눌러 원인 입력 칸이 열려 있음
   selectedId: null, // 힌트를 보여 줄 제출(버전)
   draft: null, // 아직 제출하지 않은 다음 버전 초안
   draftFor: null, // 그 초안이 속한 스레드
@@ -204,7 +205,13 @@ function renderSummary() {
   $("mode-desc").textContent = mode.desc;
   $("attempt-count").textContent = `${t ? t.submissions.length : 0}회`;
 
-  $("finish-thread").hidden = kind !== "own";
+  if (kind !== "own") state.explaining = false;
+  $("finish-thread").hidden = kind !== "own" || state.explaining;
+  $("explain-form").hidden = !state.explaining;
+  // 내가 끝낸 코드를 보고 있으면 그때 적은 원인을 보여 준다 (주인에게만 내려온다).
+  const note = kind === "closed" && t.status === "fixed" ? t.explanation : null;
+  $("explain-view").hidden = !note;
+  $("explain-view").textContent = note ? `📝 내가 적은 원인: ${note}` : "";
   $("start-help").hidden = !(state.status.can_help && kind !== "helping");
   $("end-help").hidden = kind !== "helping";
   $("new-code").hidden = kind !== "closed";
@@ -520,6 +527,7 @@ function renderHistory() {
       el("span", "preview", item.preview),
       el("span", "when", `${item.submission_count}번 제출 · ${formatTime(item.created_at)}`),
     );
+    if (item.explanation) button.append(el("span", "note", `📝 ${item.explanation}`));
     button.addEventListener("click", () => {
       state.pinnedThreadId = item.id === state.status.open_thread_id ? null : item.id;
       state.draft = null;
@@ -570,35 +578,47 @@ async function submitCode() {
   }
 }
 
-// 되돌리기 어려운 동작은 같은 버튼을 한 번 더 눌러야 실행된다.
-function confirmTwice(button, armedLabel, action) {
-  const original = button.textContent;
-  let timer = null;
-  button.addEventListener("click", async () => {
-    if (timer === null) {
-      button.textContent = armedLabel;
-      timer = setTimeout(() => {
-        button.textContent = original;
-        timer = null;
-      }, 4000);
-      return;
-    }
-    clearTimeout(timer);
-    timer = null;
-    button.textContent = original;
-    await action();
-  });
-}
-
-confirmTwice($("finish-thread"), "정말 끝낼까요? 한 번 더 누르세요", async () => {
+// '다 고쳤어요'를 누르면 원인을 한 줄 적는 칸이 열린다 (US-09). 이 칸이 끝내기 전 확인 단계도 겸한다.
+$("finish-thread").addEventListener("click", () => {
   actionError("");
+  state.explaining = true;
+  $("explanation").value = "";
+  renderSummary();
+  $("explanation").focus();
+});
+
+async function finishThread(explanation) {
+  actionError("");
+  const buttons = $("explain-form").querySelectorAll("button");
+  buttons.forEach((b) => (b.disabled = true));
   try {
-    const thread = await api(`/api/threads/${state.thread.id}/finish`, { method: "POST" });
+    const body = explanation ? { explanation } : undefined;
+    const thread = await api(`/api/threads/${state.thread.id}/finish`, { method: "POST", body });
+    state.explaining = false;
     state.pinnedThreadId = thread.id;
     await refresh();
   } catch (err) {
     handleError(err, $("action-error"));
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
   }
+}
+
+$("explain-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const text = $("explanation").value.trim();
+  if (!text) {
+    actionError("한 줄을 적거나 '건너뛰고 끝내기'를 눌러 주세요.");
+    $("explanation").focus();
+    return;
+  }
+  finishThread(text);
+});
+$("explain-skip").addEventListener("click", () => finishThread(null));
+$("explain-cancel").addEventListener("click", () => {
+  actionError("");
+  state.explaining = false;
+  renderSummary();
 });
 
 $("start-help").addEventListener("click", async () => {
@@ -829,7 +849,7 @@ function resetState() {
   stopPolling();
   closeChat();
   Object.assign(state, {
-    me: null, status: null, thread: null, threads: [], pinnedThreadId: null, selectedId: null, helpDeadline: null,
+    me: null, status: null, thread: null, threads: [], pinnedThreadId: null, explaining: false, selectedId: null, helpDeadline: null,
     draft: null, draftFor: null, scrolledFor: undefined,
   });
   Object.assign(state.chat, { sessionId: null, ended: false, messages: [] });

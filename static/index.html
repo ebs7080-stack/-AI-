@@ -103,6 +103,16 @@
             <button id="new-code" class="btn btn-secondary" type="button" hidden></button>
           </div>
         </div>
+        <form id="explain-form" class="explain-form" hidden>
+          <label for="explanation">무엇이 문제였는지 한 줄로 적어 보세요 <span class="muted">(나만 볼 수 있어요)</span></label>
+          <input id="explanation" type="text" maxlength="200" autocomplete="off" placeholder="예: 반복할 때마다 조건에 쓴 변수가 바뀌지 않았다">
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">적고 끝내기 ✓</button>
+            <button id="explain-skip" class="btn btn-secondary" type="button">건너뛰고 끝내기</button>
+            <button id="explain-cancel" class="btn btn-secondary" type="button">아직 고치는 중이에요</button>
+          </div>
+        </form>
+        <p id="explain-view" class="explain-view" hidden></p>
         <p id="action-error" class="error" role="alert"></p>
       </section>
 

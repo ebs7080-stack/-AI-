@@ -109,6 +109,7 @@ def test_existing_threads_table_without_unit_id_is_upgraded(tmp_path, monkeypatc
     conn.row_factory = sqlite3.Row
     thread = conn.execute("SELECT student_id, status, unit_id FROM threads").fetchone()
     assert (thread["student_id"], thread["status"], thread["unit_id"]) == (1, "fixed", None)  # 기록은 그대로다
+    assert conn.execute("SELECT explanation FROM threads").fetchone()["explanation"] is None  # US-09 열도 생긴다
     index = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_threads_unit'")
     assert index.fetchone() is not None
     conn.close()

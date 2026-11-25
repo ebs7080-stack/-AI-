@@ -13,6 +13,7 @@ import sqlite3
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from . import chat_filter, helptime
@@ -24,6 +25,7 @@ from .threads import close_thread, peer_name, thread_out, viewable_thread
 router = APIRouter(prefix="/api")
 
 MAX_MESSAGE_LENGTH = 500
+MAX_EXPLANATION_LENGTH = 200
 HISTORY_LIMIT = 100
 
 
@@ -90,7 +92,7 @@ def status(db: sqlite3.Connection = Depends(get_db), student: sqlite3.Row = Depe
 def list_threads(db: sqlite3.Connection = Depends(get_db), student: sqlite3.Row = Depends(current_student)):
     rows = db.execute(
         """
-        SELECT t.id, t.status, t.created_at,
+        SELECT t.id, t.status, t.created_at, t.explanation,
                (SELECT COUNT(*) FROM submissions s WHERE s.thread_id = t.id) AS submission_count,
                (SELECT code FROM submissions s WHERE s.thread_id = t.id ORDER BY s.id LIMIT 1) AS first_code
         FROM threads t WHERE t.student_id = ? ORDER BY t.id DESC
@@ -107,6 +109,7 @@ def list_threads(db: sqlite3.Connection = Depends(get_db), student: sqlite3.Row 
                 "created_at": row["created_at"],
                 "submission_count": row["submission_count"],
                 "preview": first_line[:60],
+                "explanation": row["explanation"],  # 내 코드 목록이라 주인 본인만 받는다
             }
         )
     return result
@@ -125,13 +128,33 @@ def get_thread(
     return thread_out(db, thread, student["id"])
 
 
+class FinishIn(BaseModel):
+    # 무엇이 문제였는지 학생이 적은 한 줄 (US-09). 비우거나 보내지 않으면 건너뛴 것으로 본다.
+    explanation: str | None = None
+
+
+def _clean_explanation(text: str | None) -> str | None:
+    """한 줄로 모은다. 줄바꿈은 띄어쓰기로 바꾸고, 비어 있으면 None."""
+    if text is None:
+        return None
+    line = " ".join(text.split())
+    if len(line) > MAX_EXPLANATION_LENGTH:
+        raise HTTPException(status_code=400, detail=f"설명은 {MAX_EXPLANATION_LENGTH}자까지 적을 수 있어요.")
+    return line or None
+
+
 @router.post("/threads/{thread_id}/finish")
 def finish_thread(
     thread_id: int,
+    body: FinishIn | None = None,
     db: sqlite3.Connection = Depends(get_db),
     student: sqlite3.Row = Depends(current_student),
 ):
-    """'다 고쳤어요'. 분석기가 아직 실제 오류를 판정하지 못하므로 학생이 직접 끝낼 수도 있다."""
+    """'다 고쳤어요'. 분석기가 아직 실제 오류를 판정하지 못하므로 학생이 직접 끝낸다.
+
+    원인을 한 줄 적어 함께 보내면 저장한다(US-09). 이미 끝낸 코드에 다시 보내면 설명만 고친다.
+    """
+    explanation = _clean_explanation(body.explanation if body else None)
     thread = db.execute(
         "SELECT id, student_id, status, created_at FROM threads WHERE id = ? AND student_id = ?",
         (thread_id, student["id"]),
@@ -141,13 +164,15 @@ def finish_thread(
     if thread["status"] == "dropped":
         raise HTTPException(status_code=409, detail="그만둔 코드는 완성으로 바꿀 수 없어요.")
     ended: list[int] = []
-    if thread["status"] == "open":
-        with db:
+    with db:
+        if thread["status"] == "open":
             ended = close_thread(db, thread_id, "fixed")
-        for session_id in ended:
-            publish(session_id, {"type": "ended", "reason": "fixed"})
+        if body is not None and body.explanation is not None:
+            db.execute("UPDATE threads SET explanation = ? WHERE id = ?", (explanation, thread_id))
+    for session_id in ended:
+        publish(session_id, {"type": "ended", "reason": "fixed"})
     thread = db.execute(
-        "SELECT id, student_id, status, created_at FROM threads WHERE id = ?", (thread_id,)
+        "SELECT id, student_id, status, created_at, explanation FROM threads WHERE id = ?", (thread_id,)
     ).fetchone()
     return thread_out(db, thread, student["id"])
 
