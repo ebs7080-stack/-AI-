@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS threads (
     closed_at TEXT,
     -- 시작할 때의 교실 현재 단원. 나중에 교사가 단원을 넘겨도 이미 시작한 코드의 소속은 그대로 남는다.
     unit_id INTEGER REFERENCES units(id),
-    -- '다 고쳤어요' 때 학생이 적은 원인 한 줄 (US-09). 건너뛰면 NULL. 주인에게만 보인다.
+    -- '다 고쳤어요' 때 학생이 자유롭게 적은 생각(어려웠던 점 등, US-09). 건너뛰면 NULL. 주인과 교사만 본다.
     explanation TEXT
 );
 

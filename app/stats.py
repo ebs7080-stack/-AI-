@@ -2,6 +2,7 @@
 
 학생이 쓴 코드 원문과 채팅 내용은 다루지 않고 숫자와 상태만 돌려준다 (NFR-3). 개별 학생의
 코드·대화를 교사가 볼 수 있게 할지는 요구사항이 아직 정하지 않았다 (requirements.md 4번).
+예외는 학생이 '다 고쳤어요' 때 교사에게 보이는 줄 알고 남긴 글(reflections)이다 (2026-11-25 사용자 결정).
 모든 질의는 class_id 하나로 좁혀 다른 학급의 데이터가 섞일 수 없다.
 """
 
@@ -30,8 +31,13 @@ def _cutoff(start: date | None) -> str:
     return datetime.combine(start, time.min, KST).astimezone(timezone.utc).strftime(DB_TIME_FORMAT)
 
 
-def class_dashboard(db: sqlite3.Connection, class_id: int, days: int | None) -> dict:
-    """days 일 동안(오늘 포함)의 학급 통계. days 가 None 이면 전체 기간."""
+def class_dashboard(
+    db: sqlite3.Connection, class_id: int, days: int | None, reflections_limit: int | None = None
+) -> dict:
+    """days 일 동안(오늘 포함)의 학급 통계. days 가 None 이면 전체 기간.
+
+    reflections_limit 는 학생이 남긴 글을 최근 것부터 몇 개 보낼지다. 화면의 '더 보기'가 늘린다.
+    """
     now = datetime.now(timezone.utc)
     today = now.astimezone(KST).date()
     start = None if days is None else today - timedelta(days=days - 1)
@@ -49,6 +55,8 @@ def class_dashboard(db: sqlite3.Connection, class_id: int, days: int | None) -> 
         "daily": _daily(db, params, start, today),
         # 아래 학생 상태(고치는 중 등)는 기간과 상관없이 '지금' 기준이고, 숫자만 기간을 따른다.
         "students": _students(db, params, now),
+        # 학생이 코드를 다 고친 뒤 남긴 글(어려웠던 점 등). 선택한 기간에 끝낸 코드 기준, 최근 것부터.
+        "reflections": _reflections(db, params, reflections_limit or REFLECTIONS_PAGE),
     }
 
 
@@ -214,6 +222,60 @@ def _errors(db: sqlite3.Connection, p: dict) -> list[dict]:
 
 
 FOCUS_LIMIT = 3
+REFLECTIONS_PAGE = 20  # 처음에 보내는 개수이자 '더 보기' 한 번에 늘리는 개수
+REFLECTIONS_MAX = 1000  # 한 번에 보낼 수 있는 최대 개수
+REFLECTION_ERRORS = 3  # 글 옆에 붙이는, 그 코드에서 만난 오류 이름 개수
+
+
+def _reflections(db: sqlite3.Connection, p: dict, limit: int) -> dict:
+    """학생이 남긴 글 최근 limit 개와 기간 안의 전체 개수. 코드 원문은 넣지 않는다."""
+    where = """
+        FROM threads t JOIN students st ON st.id = t.student_id
+        WHERE st.class_id = :class_id AND t.status = 'fixed'
+          AND t.explanation IS NOT NULL AND t.closed_at >= :cutoff
+    """
+    total = db.execute(f"SELECT COUNT(*) {where}", p).fetchone()[0]
+    rows = db.execute(
+        f"""
+        SELECT t.id, t.explanation, t.closed_at, st.student_no, st.name
+        {where}
+        ORDER BY t.closed_at DESC, t.id DESC
+        LIMIT :reflections_limit
+        """,
+        {**p, "reflections_limit": min(limit, REFLECTIONS_MAX)},
+    ).fetchall()
+    errors: dict[int, list[str]] = {}
+    if rows:
+        ids = [r["id"] for r in rows]
+        marks = ",".join("?" * len(ids))
+        # 그 코드에서 만난 오류: 여러 버전에서 만난 것이 먼저, 같으면 case_id 순.
+        for r in db.execute(
+            f"""
+            SELECT s.thread_id, f.case_id, COUNT(*) AS n
+            FROM findings f JOIN submissions s ON s.id = f.submission_id
+            WHERE s.thread_id IN ({marks})
+            GROUP BY s.thread_id, f.case_id
+            ORDER BY s.thread_id, n DESC, f.case_id
+            """,
+            ids,
+        ):
+            labels = errors.setdefault(r["thread_id"], [])
+            if len(labels) < REFLECTION_ERRORS:
+                labels.append(case_label(r["case_id"]))
+    return {
+        "total": total,
+        "has_more": total > len(rows),
+        "items": [
+            {
+                "student_no": r["student_no"],
+                "name": r["name"],
+                "text": r["explanation"],
+                "finished_at": _parse(r["closed_at"]).isoformat(),
+                "errors": errors.get(r["id"], []),
+            }
+            for r in rows
+        ],
+    }
 
 
 def _focus(db: sqlite3.Connection, p: dict) -> dict:

@@ -444,12 +444,14 @@ textarea {
 .summary > .error { flex: 1 0 100%; margin: 0; }
 .explain-form, .explain-view { flex: 1 0 100%; margin: 0; }
 .explain-form label { margin-top: 0; }
+.explain-form textarea { min-height: 88px; padding: 12px 14px; background: var(--surface); border-color: var(--outline); font-family: inherit; line-height: 1.6; }
 .explain-form .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .explain-view {
   padding: 10px 14px;
   border-radius: 14px;
   background: var(--surface-low);
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .summary > .error:empty { display: none; }
 
@@ -1031,6 +1033,16 @@ textarea {
   .focus-item { grid-template-columns: auto minmax(0, 1fr); }
   .focus-item .state { grid-column: 2; justify-self: start; }
 }
+
+/* 학생들이 남긴 생각 */
+/* 안쪽 스크롤을 두지 않는다: 30초 자동 갱신 때 목록을 다시 그리면 안쪽 스크롤 위치가 맨 위로 튄다. 길이는 '더 보기'로 조절한다. */
+.reflection-list { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
+.reflection-more { display: block; margin: 14px auto 0; }
+.reflection-item { display: grid; gap: 6px; padding: 12px 16px; background: var(--surface-low); border: 1px solid var(--border); border-radius: 14px; }
+.reflection-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.reflection-text { margin: 0; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.reflection-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.reflection-tag { padding: 2px 10px; border-radius: 8px; background: var(--surface-mid); color: var(--muted); font-size: 0.75rem; }
 
 /* ---------- 교사: 오류별 힌트 편집 ---------- */
 

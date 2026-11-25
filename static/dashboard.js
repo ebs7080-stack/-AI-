@@ -8,6 +8,8 @@ const MAX_ERROR_BARS = 10; // 나머지는 표에서 본다.
 const WEEKDAYS = "일월화수목금토";
 
 let days = 7; // null 이면 전체 기간
+const REFLECTIONS_PAGE = 20; // 학생이 남긴 글을 처음에, 그리고 '더 보기' 한 번에 이만큼 더 불러온다.
+let reflectionsLimit = REFLECTIONS_PAGE; // 자동 갱신 때도 이만큼 다시 받아 펼친 글이 접히지 않게 한다.
 let data = null;
 let showDailyTable = false;
 let showErrorsTable = false;
@@ -175,6 +177,52 @@ function renderFocus() {
     );
   });
   $("focus-body").replaceChildren(el("ol", { class: "focus-list" }, ...items));
+}
+
+/* ---------- 학생들이 남긴 생각 (다 고친 뒤 자유롭게 적은 글) ---------- */
+
+function renderReflections() {
+  const { total, items, has_more: hasMore } = data.reflections;
+  $("reflections-sub").textContent =
+    "학생이 코드를 다 고친 뒤 어려웠던 점 등을 자유롭게 적은 글이에요. 선택한 기간에 끝낸 코드 기준, 최근 것부터 보여요." +
+    (total ? ` (전체 ${total}개 중 ${items.length}개)` : "");
+  if (items.length === 0) {
+    $("reflections-body").replaceChildren(emptyState("📝", "이 기간에 학생들이 남긴 글이 없어요."));
+    return;
+  }
+  const list = items.map((r) => {
+    const who = r.name === r.student_no ? r.student_no : `${r.name} (${r.student_no})`;
+    const tags = r.errors.map((label) => el("span", { class: "reflection-tag", text: label }));
+    return el(
+      "li",
+      { class: "reflection-item" },
+      el(
+        "div",
+        { class: "reflection-head" },
+        el("b", { text: who }),
+        el("span", { class: "muted small", text: formatAgo(r.finished_at) })
+      ),
+      el("p", { class: "reflection-text", text: r.text }),
+      tags.length ? el("div", { class: "reflection-tags", "aria-label": "이 코드에서 만난 오류" }, ...tags) : ""
+    );
+  });
+  const parts = [el("ul", { class: "reflection-list" }, ...list)];
+  if (hasMore) {
+    const more = el("button", {
+      class: "btn btn-secondary reflection-more",
+      type: "button",
+      text: `더 보기 (${Math.min(REFLECTIONS_PAGE, total - items.length)}개)`,
+    });
+    more.addEventListener("click", async () => {
+      more.disabled = true;
+      more.textContent = "불러오는 중…";
+      reflectionsLimit = items.length + REFLECTIONS_PAGE;
+      await load({ dim: false });
+      more.disabled = false; // 불러오지 못했으면 다시 누를 수 있게 한다 (성공하면 카드가 새로 그려진다)
+    });
+    parts.push(more);
+  }
+  $("reflections-body").replaceChildren(...parts);
 }
 
 /* ---------- 날짜별 제출 (세로 막대) ---------- */
@@ -422,6 +470,7 @@ function render() {
   helpTime.setHideNames(data.class.hide_names);
   renderKpis(data.summary);
   renderFocus();
+  renderReflections();
   renderDaily();
   renderErrors();
   renderStudents();
@@ -435,7 +484,9 @@ async function load({ dim }) {
   try {
     let res;
     try {
-      res = await fetch(`/api/teacher/classes/${classId}/dashboard${days ? `?days=${days}` : ""}`);
+      const params = new URLSearchParams({ reflections: reflectionsLimit });
+      if (days) params.set("days", days);
+      res = await fetch(`/api/teacher/classes/${classId}/dashboard?${params}`);
     } catch {
       throw new Error("서버에 연결하지 못했어요. 서버가 켜져 있는지 확인해 주세요. (start.bat)");
     }
@@ -463,6 +514,7 @@ async function load({ dim }) {
 for (const button of document.querySelectorAll(".filters button")) {
   button.addEventListener("click", () => {
     days = button.dataset.days === "all" ? null : Number(button.dataset.days);
+    reflectionsLimit = REFLECTIONS_PAGE; // 기간을 바꾸면 학생 글은 처음 개수로 돌아간다
     for (const other of document.querySelectorAll(".filters button")) {
       other.setAttribute("aria-pressed", String(other === button));
     }

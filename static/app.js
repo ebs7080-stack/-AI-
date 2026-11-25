@@ -71,7 +71,7 @@ const state = {
   thread: null, // 화면에 보이는 스레드 (없으면 새 코드 작성 화면)
   threads: [], // 내가 고친 코드 목록
   pinnedThreadId: null, // 방금 끝낸 코드나 지난 코드를 보는 중이면 그 스레드
-  explaining: false, // '다 고쳤어요'를 눌러 원인 입력 칸이 열려 있음
+  explaining: false, // '다 고쳤어요'를 눌러 생각을 적는 칸이 열려 있음
   selectedId: null, // 힌트를 보여 줄 제출(버전)
   draft: null, // 아직 제출하지 않은 다음 버전 초안
   draftFor: null, // 그 초안이 속한 스레드
@@ -208,10 +208,10 @@ function renderSummary() {
   if (kind !== "own") state.explaining = false;
   $("finish-thread").hidden = kind !== "own" || state.explaining;
   $("explain-form").hidden = !state.explaining;
-  // 내가 끝낸 코드를 보고 있으면 그때 적은 원인을 보여 준다 (주인에게만 내려온다).
+  // 내가 끝낸 코드를 보고 있으면 그때 남긴 글을 보여 준다 (주인에게만 내려온다).
   const note = kind === "closed" && t.status === "fixed" ? t.explanation : null;
   $("explain-view").hidden = !note;
-  $("explain-view").textContent = note ? `📝 내가 적은 원인: ${note}` : "";
+  $("explain-view").textContent = note ? `📝 내가 남긴 생각\n${note}` : "";
   $("start-help").hidden = !(state.status.can_help && kind !== "helping");
   $("end-help").hidden = kind !== "helping";
   $("new-code").hidden = kind !== "closed";
@@ -578,7 +578,7 @@ async function submitCode() {
   }
 }
 
-// '다 고쳤어요'를 누르면 원인을 한 줄 적는 칸이 열린다 (US-09). 이 칸이 끝내기 전 확인 단계도 겸한다.
+// '다 고쳤어요'를 누르면 어려웠던 점 등을 자유롭게 적는 칸이 열린다 (US-09). 이 칸이 끝내기 전 확인 단계도 겸한다.
 $("finish-thread").addEventListener("click", () => {
   actionError("");
   state.explaining = true;
@@ -608,7 +608,7 @@ $("explain-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const text = $("explanation").value.trim();
   if (!text) {
-    actionError("한 줄을 적거나 '건너뛰고 끝내기'를 눌러 주세요.");
+    actionError("생각을 적거나 '건너뛰고 끝내기'를 눌러 주세요.");
     $("explanation").focus();
     return;
   }
