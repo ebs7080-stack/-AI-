@@ -90,7 +90,9 @@ CREATE TABLE IF NOT EXISTS threads (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     closed_at TEXT,
     -- 시작할 때의 교실 현재 단원. 나중에 교사가 단원을 넘겨도 이미 시작한 코드의 소속은 그대로 남는다.
-    unit_id INTEGER REFERENCES units(id)
+    unit_id INTEGER REFERENCES units(id),
+    -- '다 고쳤어요' 때 학생이 적은 원인 한 줄 (US-09). 건너뛰면 NULL. 주인에게만 보인다.
+    explanation TEXT
 );
 
 CREATE TABLE IF NOT EXISTS submissions (
@@ -235,6 +237,12 @@ def _migrate_units(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migrate_explanation(conn: sqlite3.Connection) -> None:
+    """자기 설명(US-09) 전에 만든 DB 의 threads 에 explanation 열을 더한다."""
+    if "explanation" not in _columns(conn, "threads"):
+        conn.execute("ALTER TABLE threads ADD COLUMN explanation TEXT")
+
+
 def init_db() -> None:
     conn = get_connection()
     try:
@@ -245,6 +253,7 @@ def init_db() -> None:
         _migrate_accounts(conn)
         _migrate(conn)
         _migrate_units(conn)
+        _migrate_explanation(conn)
         conn.commit()
     finally:
         conn.close()
