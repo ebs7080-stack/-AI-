@@ -81,7 +81,7 @@ def thread_out(db: sqlite3.Connection, thread: sqlite3.Row, viewer_id: int) -> d
         "created_at": thread["created_at"],
         "owner": peer_name(db, thread["student_id"]),
         "is_owner": thread["student_id"] == viewer_id,
-        # 자기 설명은 주인만 본다. 짝이 된 도우미에게도 내보내지 않는다 (US-09).
+        # 학생이 남긴 글은 주인과 교사(대시보드)만 본다. 짝이 된 도우미에게는 내보내지 않는다 (US-09).
         "explanation": thread["explanation"] if thread["student_id"] == viewer_id else None,
         "submissions": submissions,
     }

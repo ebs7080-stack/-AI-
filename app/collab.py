@@ -9,6 +9,7 @@
 """
 
 import random
+import re
 import sqlite3
 from urllib.parse import urlparse
 
@@ -25,7 +26,7 @@ from .threads import close_thread, peer_name, thread_out, viewable_thread
 router = APIRouter(prefix="/api")
 
 MAX_MESSAGE_LENGTH = 500
-MAX_EXPLANATION_LENGTH = 200
+MAX_EXPLANATION_LENGTH = 500
 HISTORY_LIMIT = 100
 
 
@@ -129,18 +130,20 @@ def get_thread(
 
 
 class FinishIn(BaseModel):
-    # 무엇이 문제였는지 학생이 적은 한 줄 (US-09). 비우거나 보내지 않으면 건너뛴 것으로 본다.
+    # 어려웠던 점 등 학생이 자유롭게 적은 생각 (US-09). 비우거나 보내지 않으면 건너뛴 것으로 본다.
+    # 코드 주인과 그 교실의 교사가 본다 (2026-11-25 사용자 결정).
     explanation: str | None = None
 
 
 def _clean_explanation(text: str | None) -> str | None:
-    """한 줄로 모은다. 줄바꿈은 띄어쓰기로 바꾸고, 비어 있으면 None."""
+    """줄 끝 공백과 앞뒤 빈 줄을 지우고 빈 줄은 하나까지만 남긴다. 비어 있으면 None."""
     if text is None:
         return None
-    line = " ".join(text.split())
-    if len(line) > MAX_EXPLANATION_LENGTH:
-        raise HTTPException(status_code=400, detail=f"설명은 {MAX_EXPLANATION_LENGTH}자까지 적을 수 있어요.")
-    return line or None
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in lines)).strip("\n")
+    if len(cleaned) > MAX_EXPLANATION_LENGTH:
+        raise HTTPException(status_code=400, detail=f"{MAX_EXPLANATION_LENGTH}자까지 적을 수 있어요.")
+    return cleaned or None
 
 
 @router.post("/threads/{thread_id}/finish")
@@ -152,7 +155,7 @@ def finish_thread(
 ):
     """'다 고쳤어요'. 분석기가 아직 실제 오류를 판정하지 못하므로 학생이 직접 끝낸다.
 
-    원인을 한 줄 적어 함께 보내면 저장한다(US-09). 이미 끝낸 코드에 다시 보내면 설명만 고친다.
+    어려웠던 점 등 생각을 적어 함께 보내면 저장한다(US-09). 이미 끝낸 코드에 다시 보내면 글만 고친다.
     """
     explanation = _clean_explanation(body.explanation if body else None)
     thread = db.execute(

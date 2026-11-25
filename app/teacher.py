@@ -27,7 +27,7 @@ from .auth import (
 from . import helptime, hints, ratelimit
 from .db import get_db
 from .hub import publish
-from .stats import class_dashboard, unit_progress
+from .stats import REFLECTIONS_MAX, REFLECTIONS_PAGE, class_dashboard, unit_progress
 
 router = APIRouter(prefix="/api/teacher")
 
@@ -588,11 +588,13 @@ def set_current_unit(
 def dashboard(
     # 최근 며칠(오늘 포함). 없으면 전체 기간.
     days: int | None = Query(default=None, ge=1, le=365),
+    # 학생이 남긴 글을 최근 것부터 몇 개 보낼지. 화면의 '더 보기'가 늘린다.
+    reflections: int = Query(default=REFLECTIONS_PAGE, ge=1, le=REFLECTIONS_MAX),
     db: sqlite3.Connection = Depends(get_db),
     cls: sqlite3.Row = Depends(owned_class),
 ):
     return {
         "class": _class_out(cls),
         "help_time": helptime.state(db, cls["id"]),
-        **class_dashboard(db, cls["id"], days),
+        **class_dashboard(db, cls["id"], days, reflections),
     }
